@@ -10,7 +10,7 @@ var wkhtmltopdf = require("wkhtmltopdf");
 const archiver = require("archiver");
 
 const app = express();
-const port = process.env.PORT || 80;
+const port = process.env.PORT || 8080;
 
 app.use(express.json());
 app.use(fileUpload(), cors());
