@@ -122,6 +122,7 @@ app.post("/api/upload-html", async (req, res) => {
 
     // Generate PDF data from the HTML using the generatePDF function
     const pdfData = generatePDF(html);
+    console.log(html, pdfData);
 
     // An array to store promises for generating PDF buffers
     const pdfBufferPromises = pdfData.map(async (item, index) => {
@@ -168,10 +169,10 @@ app.post("/api/upload-html", async (req, res) => {
       const pdfFilename = `${tempDir}/pdf_${index}.pdf`;
       fs.writeFileSync(pdfFilename, buffer);
       zipArchive.file(pdfFilename, { name: `pdf_${index}.pdf` });
-      zipArchive.finalize();
     });
 
     // Finalize the ZIP archive
+    zipArchive.finalize();
 
     // Send the ZIP file as a response
     res.contentType("application/zip");
