@@ -140,6 +140,7 @@ app.post("/api/upload-html", async (req, res) => {
 
         wkdata.on("end", () => {
           const concatenatedBuffer = Buffer.concat(buffers);
+          console.log("PDF Buffer size:", concatenatedBuffer.length);
           resolve(concatenatedBuffer);
         });
 
