@@ -66,6 +66,9 @@ app.get("/", (req, res) => {
   res.write("hello world");
   res.send("hello world");
 });
+app.get("/test", (req, res) => {
+  res.write("its working💪");
+});
 
 const generateWKPDF = (item) => {
   const data = wkhtmltopdf(item, {
