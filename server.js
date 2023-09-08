@@ -62,12 +62,10 @@ app.post("/api/upload_csv", (req, res) => {
 });
 
 app.get("/", (req, res) => {
-  console.log("hello");
-  res.write("hello world");
   res.send("hello world");
 });
 app.get("/test", (req, res) => {
-  res.write("its working💪");
+  res.send("its working💪");
 });
 
 const generateWKPDF = (item) => {
