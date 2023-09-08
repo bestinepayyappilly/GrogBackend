@@ -10,7 +10,7 @@ var wkhtmltopdf = require("wkhtmltopdf");
 const archiver = require("archiver");
 
 const app = express();
-const port = process.env.PORT || 3001;
+const port = process.env.PORT || 80;
 
 app.use(express.json());
 app.use(fileUpload(), cors());
@@ -63,6 +63,7 @@ app.post("/api/upload_csv", (req, res) => {
 
 app.get("/", (req, res) => {
   console.log("hello");
+  res.write("hello world");
   res.send("hello world");
 });
 
