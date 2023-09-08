@@ -50,10 +50,6 @@ const generatePDF = (template) => {
   return data;
 };
 
-const generatedPDF = () => {
-  const data = generatePDF();
-};
-
 app.post("/api/upload_csv", (req, res) => {
   const fileValue = req.files.file.data;
   const csv = new Buffer.from(fileValue).toString();
@@ -122,7 +118,6 @@ app.post("/api/upload-html", async (req, res) => {
 
     // Generate PDF data from the HTML using the generatePDF function
     const pdfData = generatePDF(html);
-    console.log(pdfData);
     // An array to store promises for generating PDF buffers
     const pdfBufferPromises = pdfData.map(async (item, index) => {
       const wkdata = generateWKPDF(item);
@@ -149,56 +144,62 @@ app.post("/api/upload-html", async (req, res) => {
     });
 
     // Wait for all PDF buffers to be generated
-    const pdfBuffers = await Promise.all(pdfBufferPromises);
-    console.log(pdfBuffers);
-    // Create a ZIP file and add PDFs to it
-    // const zipOutput = fs.createWriteStream("output.zip");
-    const zipArchive = archiver("zip", {
-      zlib: { level: 9 },
-    });
-
-    // zipArchive.pipe(zipOutput);
-
-    const tempDir = "temp_pdfs";
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir);
-    }
-    const fileWritingPromises = [];
-
-    pdfBuffers.forEach((buffer, index) => {
-      const pdfFilename = `${tempDir}/pdf_${index}.pdf`;
-      // fs.writeFileSync(pdfFilename, buffer);
-      // zipArchive.file(pdfFilename, { name: `pdf_${index}.pdf` });
-      const fileWritePromise = new Promise((resolve, reject) => {
-        fs.writeFile(pdfFilename, buffer, (err) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve();
-          }
+    // const pdfBuffers = await Promise.all(pdfBufferPromises);
+    Promise.all(pdfBufferPromises)
+      .then((pdfBuffers) => {
+        console.log(pdfBuffers);
+        // Create a ZIP file and add PDFs to it
+        // const zipOutput = fs.createWriteStream("output.zip");
+        const zipArchive = archiver("zip", {
+          zlib: { level: 9 },
         });
-      });
-      fileWritingPromises.push(fileWritePromise);
-      zipArchive.file(pdfFilename, { name: `pdf_${index}.pdf` });
-    });
 
-    // Finalize the ZIP archive
-    // zipArchive.finalize();
+        // zipArchive.pipe(zipOutput);
 
-    Promise.all(fileWritingPromises)
-      .then(() => {
-        // Finalize the ZIP archive once all files are written
-        zipArchive.finalize();
+        const tempDir = "temp_pdfs";
+        if (!fs.existsSync(tempDir)) {
+          fs.mkdirSync(tempDir);
+        }
+        const fileWritingPromises = [];
+
+        pdfBuffers.forEach((buffer, index) => {
+          const pdfFilename = `${tempDir}/pdf_${index}.pdf`;
+          // fs.writeFileSync(pdfFilename, buffer);
+          // zipArchive.file(pdfFilename, { name: `pdf_${index}.pdf` });
+          const fileWritePromise = new Promise((resolve, reject) => {
+            fs.writeFile(pdfFilename, buffer, (err) => {
+              if (err) {
+                reject(err);
+              } else {
+                resolve();
+              }
+            });
+          });
+          fileWritingPromises.push(fileWritePromise);
+          zipArchive.file(pdfFilename, { name: `pdf_${index}.pdf` });
+        });
+
+        // Finalize the ZIP archive
+        // zipArchive.finalize();
+
+        Promise.all(fileWritingPromises)
+          .then(() => {
+            // Finalize the ZIP archive once all files are written
+            zipArchive.finalize();
+          })
+          .catch((error) => {
+            console.error("Error writing files:", error);
+            res.status(500).send("Internal Server Error");
+          });
+
+        // Send the ZIP file as a response
+        res.contentType("application/zip");
+        res.attachment("pdfs.zip");
+        zipArchive.pipe(res);
       })
-      .catch((error) => {
-        console.error("Error writing files:", error);
-        res.status(500).send("Internal Server Error");
+      .catch((err) => {
+        console.log(err);
       });
-
-    // Send the ZIP file as a response
-    res.contentType("application/zip");
-    res.attachment("pdfs.zip");
-    zipArchive.pipe(res);
 
     // zipOutput.pipe(res);
   } catch (error) {
