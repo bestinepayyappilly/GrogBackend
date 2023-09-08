@@ -163,15 +163,37 @@ app.post("/api/upload-html", async (req, res) => {
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir);
     }
+    const fileWritingPromises = [];
 
     pdfBuffers.forEach((buffer, index) => {
       const pdfFilename = `${tempDir}/pdf_${index}.pdf`;
-      fs.writeFileSync(pdfFilename, buffer);
+      // fs.writeFileSync(pdfFilename, buffer);
+      // zipArchive.file(pdfFilename, { name: `pdf_${index}.pdf` });
+      const fileWritePromise = new Promise((resolve, reject) => {
+        fs.writeFile(pdfFilename, buffer, (err) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve();
+          }
+        });
+      });
+      fileWritingPromises.push(fileWritePromise);
       zipArchive.file(pdfFilename, { name: `pdf_${index}.pdf` });
     });
 
     // Finalize the ZIP archive
-    zipArchive.finalize();
+    // zipArchive.finalize();
+
+    Promise.all(fileWritingPromises)
+      .then(() => {
+        // Finalize the ZIP archive once all files are written
+        zipArchive.finalize();
+      })
+      .catch((error) => {
+        console.error("Error writing files:", error);
+        res.status(500).send("Internal Server Error");
+      });
 
     // Send the ZIP file as a response
     res.contentType("application/zip");
