@@ -168,10 +168,10 @@ app.post("/api/upload-html", async (req, res) => {
       const pdfFilename = `${tempDir}/pdf_${index}.pdf`;
       fs.writeFileSync(pdfFilename, buffer);
       zipArchive.file(pdfFilename, { name: `pdf_${index}.pdf` });
+      zipArchive.finalize();
     });
 
     // Finalize the ZIP archive
-    zipArchive.finalize();
 
     // Send the ZIP file as a response
     res.contentType("application/zip");
