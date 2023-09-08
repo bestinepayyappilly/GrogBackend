@@ -75,7 +75,6 @@ const generateWKPDF = (item) => {
     marginBottom: 2,
     marginLeft: 3,
     marginRight: 3,
-    dpi: 100,
     footerSpacing: 0,
     noOutline: false,
     pageSize: "A3",
