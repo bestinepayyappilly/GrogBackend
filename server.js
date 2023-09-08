@@ -122,7 +122,7 @@ app.post("/api/upload-html", async (req, res) => {
 
     // Generate PDF data from the HTML using the generatePDF function
     const pdfData = generatePDF(html);
-
+    console.log(pdfData);
     // An array to store promises for generating PDF buffers
     const pdfBufferPromises = pdfData.map(async (item, index) => {
       const wkdata = generateWKPDF(item);
