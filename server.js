@@ -87,7 +87,7 @@ const generateWKPDF = (item) => {
     // pageWidth: 176,
     pageWidth: 242,
     // pageHeight: 318,
-    pageHeight: 188,
+    pageHeight: 190,
   });
   //This is a new comment
   return data;
