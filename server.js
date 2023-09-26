@@ -85,9 +85,9 @@ const generateWKPDF = (item) => {
     // pageSize: "A4",
     // pageSize: "Legal",
     // pageWidth: 176,
-    pageWidth: 240,
+    pageWidth: 242,
     // pageHeight: 318,
-    pageHeight: 185,
+    pageHeight: 187,
   });
   //This is a new comment
   return data;
