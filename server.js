@@ -8,6 +8,7 @@ var fs = require("fs");
 const puppeteer = require("puppeteer");
 var wkhtmltopdf = require("wkhtmltopdf");
 const archiver = require("archiver");
+var https = require("https");
 
 const app = express();
 const port = process.env.PORT || 443;
@@ -217,6 +218,14 @@ app.post("/api/upload-html", async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`server is running on port ${port}`);
-});
+https
+  .createServer(
+    {
+      key: fs.readFileSync("server.key"),
+      cert: fs.readFileSync("server.cert"),
+    },
+    app
+  )
+  .listen(port, function () {
+    console.log(`server is running on port ${port}`);
+  });
