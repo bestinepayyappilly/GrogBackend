@@ -221,8 +221,8 @@ app.post("/api/upload-html", async (req, res) => {
 https
   .createServer(
     {
-      key: fs.readFileSync("server.key"),
-      cert: fs.readFileSync("server.cert"),
+      key: fs.readFileSync("./certs/server.key"),
+      cert: fs.readFileSync("./certs/server.cert"),
     },
     app
   )
