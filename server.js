@@ -96,8 +96,8 @@ const generateWKPDF = (item, type) => {
           marginLeft: 0,
           marginRight: 0,
           marginBottom: 0,
-          pageWidth: 176,
-          pageHeight: 315,
+          pageWidth: 175,
+          pageHeight: 314,
         };
       }
       case 3: {
@@ -112,7 +112,7 @@ const generateWKPDF = (item, type) => {
           marginRight: 0,
           marginBottom: 0,
           pageWidth: 175,
-          pageHeight: 315,
+          pageHeight: 314,
         };
       }
       case 2: {
