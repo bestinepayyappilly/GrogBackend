@@ -82,8 +82,8 @@ const generateWKPDF = (item, type) => {
           dpi: 100,
           footerSpacing: 0,
           // pageSize: "A4",
-          pageWidth: 205,
-          pageHeight: 293,
+          pageWidth: 210,
+          pageHeight: 295,
         };
       }
 
