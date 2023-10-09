@@ -41,7 +41,6 @@ async function convertHTMLToPDF(htmlString) {
   await browser.close();
   return pdf;
 }
-console.log(CSVData);
 
 const generatePDF = (template) => {
   const data = [];
@@ -54,10 +53,9 @@ const generatePDF = (template) => {
 };
 
 app.post("/api/upload_csv", (req, res) => {
-  console.log(req.files.file.data);
   const fileValue = req.files.file.data;
   const csv = new Buffer.from(fileValue).toString();
-  console.log(csv);
+
   handleParseCSV(csv);
   res.send({ message: "received csv file" });
 });
@@ -174,9 +172,6 @@ const getHtml = (typeid) => {
     }
   }
 };
-console.log(getHtml(1));
-// console.log(typeof html);
-console.log(generatePDF(getHtml(1)));
 
 app.post("/api/upload-html", async (req, res) => {
   try {
@@ -209,8 +204,6 @@ app.post("/api/upload-html", async (req, res) => {
     });
     Promise.all(pdfBufferPromises)
       .then((pdfBuffers) => {
-        console.log(pdfBuffers);
-
         const zipArchive = archiver("zip", {
           zlib: { level: 9 },
         });
