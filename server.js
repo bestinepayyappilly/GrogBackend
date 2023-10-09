@@ -81,7 +81,9 @@ const generateWKPDF = (item, type) => {
           marginRight: 3,
           dpi: 100,
           footerSpacing: 0,
-          pageSize: "A4",
+          // pageSize: "A4",
+          pageWidth: 210,
+          pageHeight: 298,
         };
       }
 
@@ -97,7 +99,7 @@ const generateWKPDF = (item, type) => {
           marginRight: 0,
           marginBottom: 0,
           pageWidth: 175,
-          pageHeight: 314,
+          pageHeight: 315,
         };
       }
       case 3: {
@@ -112,7 +114,7 @@ const generateWKPDF = (item, type) => {
           marginRight: 0,
           marginBottom: 0,
           pageWidth: 175,
-          pageHeight: 314,
+          pageHeight: 315,
         };
       }
       case 2: {
