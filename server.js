@@ -55,6 +55,7 @@ const generatePDF = (template) => {
 app.post("/api/upload_csv", (req, res) => {
   const fileValue = req.files.file.data;
   const csv = new Buffer.from(fileValue).toString();
+
   handleParseCSV(csv);
   res.send({ message: "received csv file" });
 });
@@ -276,18 +277,18 @@ app.post("/api/upload-html", async (req, res) => {
   }
 });
 
-// https
-//   .createServer(
-//     {
-//       key: fs.readFileSync("./certs/server.key"),
-//       cert: fs.readFileSync("./certs/server.cert"),
-//     },
-//     app
-//   )
-//   .listen(port, function () {
-//     console.log(`server is running on port ${port}`);
-//   });
+https
+  .createServer(
+    {
+      key: fs.readFileSync("./certs/server.key"),
+      cert: fs.readFileSync("./certs/server.cert"),
+    },
+    app
+  )
+  .listen(port, function () {
+    console.log(`server is running on port ${port}`);
+  });
 
-app.listen(port, function () {
-  console.log(`server is running on ${port}`);
-});
+// app.listen(port, function () {
+//   console.log(`server is running on ${port}`);
+// });
