@@ -182,7 +182,7 @@ app.post("/api/upload-html", async (req, res) => {
   try {
     const { typeId } = req.body;
 
-    const pdfData = generatePDF(getHtml(1));
+    const pdfData = generatePDF(getHtml(typeId));
 
     const pdfBufferPromises = pdfData.map(async (item, index) => {
       const wkdata = generateWKPDF(item, typeId);
