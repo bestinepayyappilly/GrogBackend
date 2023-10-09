@@ -9,6 +9,7 @@ const puppeteer = require("puppeteer");
 var wkhtmltopdf = require("wkhtmltopdf");
 const archiver = require("archiver");
 var https = require("https");
+const cheerio = require("cheerio");
 
 const app = express();
 const port = process.env.PORT || 443;
@@ -40,6 +41,7 @@ async function convertHTMLToPDF(htmlString) {
   await browser.close();
   return pdf;
 }
+console.log(CSVData);
 
 const generatePDF = (template) => {
   const data = [];
@@ -52,8 +54,10 @@ const generatePDF = (template) => {
 };
 
 app.post("/api/upload_csv", (req, res) => {
+  console.log(req.files.file.data);
   const fileValue = req.files.file.data;
   const csv = new Buffer.from(fileValue).toString();
+  console.log(csv);
   handleParseCSV(csv);
   res.send({ message: "received csv file" });
 });
@@ -65,72 +69,123 @@ app.get("/test", (req, res) => {
   res.send("its working💪");
 });
 
-const generateWKPDF = (item) => {
-  const data = wkhtmltopdf(item, {
-    // output: "out.pdf",
-    enableLocalFileAccess: true,
-    // orientation: "Portrait",
-    orientation: "Landscape",
-    zoom: 1.49,
-    marginTop: 5,
-    marginBottom: 2,
-    marginLeft: 3,
-    marginRight: 3,
-    dpi: 100,
-    footerSpacing: 0,
-    noOutline: false,
-    // marginTop: 0,
-    // marginLeft: 0,
-    // marginRight: 0,
-    // marginBottom: 0,
-    pageSize: "A4",
-    // pageSize: "Legal",
-    // pageWidth: 176,
-    // pageWidth: 242,
-    // pageHeight: 318,
-    // pageHeight: 186,
-  });
-  //This is a new comment
+const generateWKPDF = (item, type) => {
+  const generationType = (type) => {
+    switch (type) {
+      case 1: {
+        return {
+          enableLocalFileAccess: true,
+          orientation: "Landscape",
+          zoom: 1.49,
+          marginTop: 5,
+          marginBottom: 2,
+          marginLeft: 3,
+          marginRight: 3,
+          dpi: 100,
+          footerSpacing: 0,
+          pageSize: "A4",
+        };
+      }
+
+      case 3 || 4: {
+        return {
+          enableLocalFileAccess: true,
+          orientation: "Portrait",
+          zoom: 1.49,
+          dpi: 100,
+          footerSpacing: 0,
+          marginTop: 0,
+          marginLeft: 0,
+          marginRight: 0,
+          marginBottom: 0,
+          pageWidth: 176,
+          pageHeight: 318,
+        };
+      }
+      case 2: {
+        return {
+          enableLocalFileAccess: true,
+          zoom: 1.49,
+          dpi: 100,
+          footerSpacing: 0,
+          noOutline: false,
+          marginTop: 0,
+          marginLeft: 0,
+          marginRight: 0,
+          marginBottom: 0,
+          pageWidth: 242,
+          pageHeight: 186,
+        };
+      }
+    }
+  };
+
+  // {
+  //   // output: "out.pdf",
+  //   enableLocalFileAccess: true,
+  //   // orientation: "Portrait",
+  //   orientation: "Landscape",
+  //   zoom: 1.49,
+  //   marginTop: 5,
+  //   marginBottom: 2,
+  //   marginLeft: 3,
+  //   marginRight: 3,
+  //   dpi: 100,
+  //   footerSpacing: 0,
+  //   // noOutline: false,
+  //   // marginTop: 0,
+  //   // marginLeft: 0,
+  //   // marginRight: 0,
+  //   // marginBottom: 0,
+  //   pageSize: "A4",
+  //   // pageSize: "Legal",
+  //   // pageWidth: 176,
+  //   // pageWidth: 242,
+  //   // pageHeight: 318,
+  //   // pageHeight: 186,
+  // }
+
+  const data = wkhtmltopdf(item, generationType(type));
   return data;
 };
 
-// app.post("/api/upload-html", async (req, res) => {
-//   const fileValue = req.files.file.data;
-//   html = new Buffer.from(fileValue).toString();
-//   const data = generatePDF(html);
-//   const pdfData = [];
-
-//   data.slice(0, 1).map((item, index) => {
-//     const wkdata = generateWKPDF(item);
-
-//     wkdata.on("readable", () => {
-//       var buffer = wkdata.read();
-//       if (buffer) {
-//         pdfData.push(buffer.toString());
-//       }
-//     });
-//   });
-
-//   console.log(pdfData);
-
-//   // if (pdfData) {
-//   //   res.send({ message: "received html file", pdf: pdfData });
-//   // }
-//   // res.contentType("blob")
-//   // if (pdfgenerationstat)
-//   // res.send({ message: "received html file", pdf: "" });
-// });
+const getHtml = (typeid) => {
+  switch (typeid) {
+    case 1: {
+      return fs.readFileSync(
+        __dirname + "/html/ParticipationCertificate.html",
+        "utf-8"
+      );
+    }
+    case 2: {
+      return fs.readFileSync(
+        __dirname + "/html/OutstandingCerificate.html.html",
+        "utf-8"
+      );
+    }
+    case 3: {
+      return fs.readFileSync(__dirname + "/html/ReportsWTax.html", "utf-8");
+    }
+    case 4: {
+      return fs.readFileSync(__dirname + "/html/ReportsWOTax.html", "utf-8");
+    }
+    default: {
+      return fs.readFileSync(__dirname + "/html/ReportsWOTax.html", "utf-8");
+    }
+  }
+};
+console.log(getHtml(1));
+// console.log(typeof html);
+console.log(generatePDF(getHtml(1)));
 
 app.post("/api/upload-html", async (req, res) => {
   try {
-    const fileValue = req.files.file.data; // Assuming file upload is handled properly
-    const html = Buffer.from(fileValue).toString(); // Convert the uploaded file data to HTML
+    const { typeId } = req.body;
 
-    // Generate PDF data from the HTML using the generatePDF function
-    const pdfData = generatePDF(html);
-    // An array to store promises for generating PDF buffers
+    const pdfData = generatePDF(getHtml(typeId));
+
     const pdfBufferPromises = pdfData.map(async (item, index) => {
-      const wkdata = generateWKPDF(item);
+      const wkdata = generateWKPDF(item, typeId);
 
       const pdfBuffer = await new Promise((resolve, reject) => {
         const buffers = [];
@@ -152,14 +207,10 @@ app.post("/api/upload-html", async (req, res) => {
 
       return pdfBuffer;
     });
-
-    // Wait for all PDF buffers to be generated
-    // const pdfBuffers = await Promise.all(pdfBufferPromises);
     Promise.all(pdfBufferPromises)
       .then((pdfBuffers) => {
         console.log(pdfBuffers);
-        // Create a ZIP file and add PDFs to it
-        // const zipOutput = fs.createWriteStream("output.zip");
+
         const zipArchive = archiver("zip", {
           zlib: { level: 9 },
         });
@@ -218,18 +269,18 @@ app.post("/api/upload-html", async (req, res) => {
   }
 });
 
-// https
-//   .createServer(
-//     {
-//       key: fs.readFileSync("./certs/server.key"),
-//       cert: fs.readFileSync("./certs/server.cert"),
-//     },
-//     app
-//   )
-//   .listen(port, function () {
-//     console.log(`server is running on port ${port}`);
-//   });
+https
+  .createServer(
+    {
+      key: fs.readFileSync("./certs/server.key"),
+      cert: fs.readFileSync("./certs/server.cert"),
+    },
+    app
+  )
+  .listen(port, function () {
+    console.log(`server is running on port ${port}`);
+  });
 
-app.listen(port, function () {
-  console.log(`server is running on port ${port}`);
-});
+// app.listen(port, function () {
+//   console.log(`server is running on ${port}`);
+// });
