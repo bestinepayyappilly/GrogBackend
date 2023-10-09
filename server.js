@@ -76,7 +76,7 @@ const generateWKPDF = (item, type) => {
           orientation: "Landscape",
           zoom: 1.49,
           marginTop: 5,
-          marginBottom: 2,
+          marginBottom: 1,
           marginLeft: 3,
           marginRight: 3,
           dpi: 100,
