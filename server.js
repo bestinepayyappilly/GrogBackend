@@ -85,7 +85,22 @@ const generateWKPDF = (item, type) => {
         };
       }
 
-      case 3 || 4: {
+      case 4: {
+        return {
+          enableLocalFileAccess: true,
+          orientation: "Portrait",
+          zoom: 1.49,
+          dpi: 100,
+          footerSpacing: 0,
+          marginTop: 0,
+          marginLeft: 0,
+          marginRight: 0,
+          marginBottom: 0,
+          pageWidth: 176,
+          pageHeight: 318,
+        };
+      }
+      case 3: {
         return {
           enableLocalFileAccess: true,
           orientation: "Portrait",
@@ -157,7 +172,7 @@ const getHtml = (typeid) => {
     }
     case 2: {
       return fs.readFileSync(
-        __dirname + "/html/OutstandingCerificate.html.html",
+        __dirname + "/html/OutstandingCerificate.html",
         "utf-8"
       );
     }
