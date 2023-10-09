@@ -70,25 +70,25 @@ const generateWKPDF = (item) => {
     // output: "out.pdf",
     enableLocalFileAccess: true,
     // orientation: "Portrait",
-    // orientation: "Landscape",
+    orientation: "Landscape",
     zoom: 1.49,
-    // marginTop: 5,
-    // marginBottom: 2,
-    // marginLeft: 3,
-    // marginRight: 3,
+    marginTop: 5,
+    marginBottom: 2,
+    marginLeft: 3,
+    marginRight: 3,
     dpi: 100,
     footerSpacing: 0,
     noOutline: false,
-    marginTop: 0,
-    marginLeft: 0,
-    marginRight: 0,
-    marginBottom: 0,
-    // pageSize: "A4",
+    // marginTop: 0,
+    // marginLeft: 0,
+    // marginRight: 0,
+    // marginBottom: 0,
+    pageSize: "A4",
     // pageSize: "Legal",
     // pageWidth: 176,
-    pageWidth: 242,
+    // pageWidth: 242,
     // pageHeight: 318,
-    pageHeight: 186,
+    // pageHeight: 186,
   });
   //This is a new comment
   return data;
@@ -218,14 +218,18 @@ app.post("/api/upload-html", async (req, res) => {
   }
 });
 
-https
-  .createServer(
-    {
-      key: fs.readFileSync("./certs/server.key"),
-      cert: fs.readFileSync("./certs/server.cert"),
-    },
-    app
-  )
-  .listen(port, function () {
-    console.log(`server is running on port ${port}`);
-  });
+// https
+//   .createServer(
+//     {
+//       key: fs.readFileSync("./certs/server.key"),
+//       cert: fs.readFileSync("./certs/server.cert"),
+//     },
+//     app
+//   )
+//   .listen(port, function () {
+//     console.log(`server is running on port ${port}`);
+//   });
+
+app.listen(port, function () {
+  console.log(`server is running on port ${port}`);
+});
