@@ -221,6 +221,7 @@ app.post("/api/upload-html", async (req, res) => {
     });
     Promise.all(pdfBufferPromises)
       .then((pdfBuffers) => {
+        console.log(pdfBuffers);
         const zipArchive = archiver("zip", {
           zlib: { level: 9 },
         });
