@@ -182,7 +182,7 @@ const getHtml = (typeid) => {
       return fs.readFileSync(__dirname + "/html/ReportsWTax.html", "utf-8");
     }
     case 4: {
-      return fs.readFileSync(__dirname + "/html/ReportsWOTax.html", "utf-8");
+      return fs.readFileSync(__dirname + "/html/ReportsWTax.html", "utf-8");
     }
     default: {
       return fs.readFileSync(__dirname + "/html/ReportsWOTax.html", "utf-8");
