@@ -102,6 +102,36 @@ const generateWKPDF = (item, type) => {
           pageHeight: 318,
         };
       }
+      case 5: {
+        return {
+          enableLocalFileAccess: true,
+          orientation: "Portrait",
+          zoom: 1.49,
+          dpi: 100,
+          footerSpacing: 0,
+          marginTop: 0,
+          marginLeft: 0,
+          marginRight: 0,
+          marginBottom: 0,
+          pageWidth: 175,
+          pageHeight: 318,
+        };
+      }
+      case 6: {
+        return {
+          enableLocalFileAccess: true,
+          orientation: "Portrait",
+          zoom: 1.49,
+          dpi: 100,
+          footerSpacing: 0,
+          marginTop: 0,
+          marginLeft: 0,
+          marginRight: 0,
+          marginBottom: 0,
+          pageWidth: 175,
+          pageHeight: 318,
+        };
+      }
       case 3: {
         return {
           enableLocalFileAccess: true,
@@ -179,10 +209,16 @@ const getHtml = (typeid) => {
       );
     }
     case 3: {
-      return fs.readFileSync(__dirname + "/html/ReportsWTax.html", "utf-8");
+      return fs.readFileSync(__dirname + "/html/ReportsWTaxreal.html", "utf-8");
     }
     case 4: {
-      return fs.readFileSync(__dirname + "/html/ReportsWTax.html", "utf-8");
+      return fs.readFileSync(__dirname + "/html/ReportsWOTax.html", "utf-8");
+    }
+    case 5: {
+      return fs.readFileSync(__dirname + "/html/ReportsWTaxv2.html", "utf-8");
+    }
+    case 6: {
+      return fs.readFileSync(__dirname + "/html/ReportsWOTaxV2.html", "utf-8");
     }
     default: {
       return fs.readFileSync(__dirname + "/html/ReportsWOTax.html", "utf-8");
