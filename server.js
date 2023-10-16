@@ -86,6 +86,36 @@ const generateWKPDF = (item, type) => {
           pageHeight: 294,
         };
       }
+      case 2: {
+        return {
+          enableLocalFileAccess: true,
+          zoom: 1.49,
+          dpi: 100,
+          footerSpacing: 0,
+          noOutline: false,
+          marginTop: 0,
+          marginLeft: 0,
+          marginRight: 0,
+          marginBottom: 0,
+          pageWidth: 242,
+          pageHeight: 186,
+        };
+      }
+      case 3: {
+        return {
+          enableLocalFileAccess: true,
+          orientation: "Portrait",
+          zoom: 1.49,
+          dpi: 100,
+          footerSpacing: 0,
+          marginTop: 0,
+          marginLeft: 0,
+          marginRight: 0,
+          marginBottom: 0,
+          pageWidth: 175,
+          pageHeight: 318,
+        };
+      }
 
       case 4: {
         return {
@@ -132,7 +162,7 @@ const generateWKPDF = (item, type) => {
           pageHeight: 318,
         };
       }
-      case 3: {
+      case 7: {
         return {
           enableLocalFileAccess: true,
           orientation: "Portrait",
@@ -147,19 +177,19 @@ const generateWKPDF = (item, type) => {
           pageHeight: 318,
         };
       }
-      case 2: {
+      case 8: {
         return {
           enableLocalFileAccess: true,
+          orientation: "Portrait",
           zoom: 1.49,
           dpi: 100,
           footerSpacing: 0,
-          noOutline: false,
           marginTop: 0,
           marginLeft: 0,
           marginRight: 0,
           marginBottom: 0,
-          pageWidth: 242,
-          pageHeight: 186,
+          pageWidth: 175,
+          pageHeight: 318,
         };
       }
     }
@@ -209,17 +239,24 @@ const getHtml = (typeid) => {
       );
     }
     case 3: {
-      return fs.readFileSync(__dirname + "/html/ReportsWTaxreal.html", "utf-8");
+      return fs.readFileSync(__dirname + "/html/ReportsWTax.html", "utf-8");
     }
     case 4: {
       return fs.readFileSync(__dirname + "/html/ReportsWOTax.html", "utf-8");
     }
     case 5: {
-      return fs.readFileSync(__dirname + "/html/ReportsWTaxv2.html", "utf-8");
+      return fs.readFileSync(__dirname + "/html/ReportsWTaxV1.html", "utf-8");
     }
     case 6: {
+      return fs.readFileSync(__dirname + "/html/ReportsWOTaxV1.html", "utf-8");
+    }
+    case 7: {
+      return fs.readFileSync(__dirname + "/html/ReportsWTaxV2.html", "utf-8");
+    }
+    case 8: {
       return fs.readFileSync(__dirname + "/html/ReportsWOTaxV2.html", "utf-8");
     }
+
     default: {
       return fs.readFileSync(__dirname + "/html/ReportsWOTax.html", "utf-8");
     }
