@@ -288,6 +288,9 @@ https
     },
     app
   )
+  .on("connection", function (socket) {
+    socket.setTimeout(10000);
+  })
   .listen(port, function () {
     console.log(`server is running on port ${port}`);
   });
