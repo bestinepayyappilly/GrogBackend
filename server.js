@@ -43,10 +43,9 @@ async function convertHTMLToPDF(htmlString) {
 }
 
 const generatePDF = (template) => {
-  const data = [];
-  CSVData.map((item) => {
+  const data = CSVData.map((item, index) => {
     const generatedHtml = generateHTML(item, template);
-    data.push(generatedHtml);
+    return { html: generatedHtml, index };
   });
 
   return data;
@@ -81,7 +80,6 @@ const generateWKPDF = (item, type) => {
           marginRight: 3,
           dpi: 100,
           footerSpacing: 0,
-          // pageSize: "A4",
           pageWidth: 210,
           pageHeight: 294,
         };
@@ -225,31 +223,6 @@ const generateWKPDF = (item, type) => {
     }
   };
 
-  // {
-  //   // output: "out.pdf",
-  //   enableLocalFileAccess: true,
-  //   // orientation: "Portrait",
-  //   orientation: "Landscape",
-  //   zoom: 1.49,
-  //   marginTop: 5,
-  //   marginBottom: 2,
-  //   marginLeft: 3,
-  //   marginRight: 3,
-  //   dpi: 100,
-  //   footerSpacing: 0,
-  //   // noOutline: false,
-  //   // marginTop: 0,
-  //   // marginLeft: 0,
-  //   // marginRight: 0,
-  //   // marginBottom: 0,
-  //   pageSize: "A4",
-  //   // pageSize: "Legal",
-  //   // pageWidth: 176,
-  //   // pageWidth: 242,
-  //   // pageHeight: 318,
-  //   // pageHeight: 186,
-  // }
-
   const data = wkhtmltopdf(item, generationType(type));
   return data;
 };
@@ -305,8 +278,8 @@ app.post("/api/upload-html", async (req, res) => {
 
     const pdfData = generatePDF(getHtml(typeId));
 
-    const pdfBufferPromises = pdfData.map(async (item, index) => {
-      const wkdata = generateWKPDF(item, typeId);
+    const pdfBufferPromises = pdfData.map(async ({ html, index }) => {
+      const wkdata = generateWKPDF(html, typeId);
 
       const pdfBuffer = await new Promise((resolve, reject) => {
         const buffers = [];
@@ -320,7 +293,7 @@ app.post("/api/upload-html", async (req, res) => {
 
         wkdata.on("end", () => {
           const concatenatedBuffer = Buffer.concat(buffers);
-          resolve(concatenatedBuffer);
+          resolve({ buffer: concatenatedBuffer, index });
         });
 
         wkdata.on("error", reject);
@@ -328,6 +301,7 @@ app.post("/api/upload-html", async (req, res) => {
 
       return pdfBuffer;
     });
+
     Promise.all(pdfBufferPromises)
       .then((pdfBuffers) => {
         console.log(pdfBuffers);
@@ -335,18 +309,15 @@ app.post("/api/upload-html", async (req, res) => {
           zlib: { level: 9 },
         });
 
-        // zipArchive.pipe(zipOutput);
-
         const tempDir = "temp_pdfs";
         if (!fs.existsSync(tempDir)) {
           fs.mkdirSync(tempDir);
         }
+
         const fileWritingPromises = [];
 
-        pdfBuffers.forEach((buffer, index) => {
-          const pdfFilename = `${tempDir}/pdf_${index + 1}.pdf`;
-          // fs.writeFileSync(pdfFilename, buffer);
-          // zipArchive.file(pdfFilename, { name: `pdf_${index}.pdf` });
+        pdfBuffers.forEach(({ buffer, index }) => {
+          const pdfFilename = `${tempDir}/${CSVData[index].name}.pdf`;
           const fileWritePromise = new Promise((resolve, reject) => {
             fs.writeFile(pdfFilename, buffer, (err) => {
               if (err) {
@@ -357,15 +328,11 @@ app.post("/api/upload-html", async (req, res) => {
             });
           });
           fileWritingPromises.push(fileWritePromise);
-          zipArchive.file(pdfFilename, { name: `pdf_${index + 1}.pdf` });
+          zipArchive.file(pdfFilename);
         });
-
-        // Finalize the ZIP archive
-        // zipArchive.finalize();
 
         Promise.all(fileWritingPromises)
           .then(() => {
-            // Finalize the ZIP archive once all files are written
             zipArchive.finalize();
           })
           .catch((error) => {
@@ -373,7 +340,6 @@ app.post("/api/upload-html", async (req, res) => {
             res.status(500).send("Internal Server Error");
           });
 
-        // Send the ZIP file as a response
         res.contentType("application/zip");
         res.attachment("pdfs.zip");
         zipArchive.pipe(res);
@@ -381,29 +347,27 @@ app.post("/api/upload-html", async (req, res) => {
       .catch((err) => {
         console.log(err);
       });
-
-    // zipOutput.pipe(res);
   } catch (error) {
     console.error("Error processing request:", error);
     res.status(500).send("Internal Server Error");
   }
 });
 
-https
-  .createServer(
-    {
-      key: fs.readFileSync("./certs/server.key"),
-      cert: fs.readFileSync("./certs/server.cert"),
-    },
-    app
-  )
-  .on("connection", function (socket) {
-    socket.setTimeout(10000);
-  })
-  .listen(port, function () {
-    console.log(`server is running on port ${port}`);
-  });
+// https
+//   .createServer(
+//     {
+//       key: fs.readFileSync("./certs/server.key"),
+//       cert: fs.readFileSync("./certs/server.cert"),
+//     },
+//     app
+//   )
+//   .on("connection", function (socket) {
+//     socket.setTimeout(10000);
+//   })
+//   .listen(port, function () {
+//     console.log(`server is running on port ${port}`);
+//   });
 
-// app.listen(port, function () {
-//   console.log(`server is running on ${port}`);
-// });
+app.listen(port, function () {
+  console.log(`server is running on ${port}`);
+});
