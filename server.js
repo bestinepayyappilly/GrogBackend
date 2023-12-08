@@ -220,6 +220,82 @@ const generateWKPDF = (item, type) => {
           pageHeight: 318,
         };
       }
+      case 11: {
+        return {
+          enableLocalFileAccess: true,
+          zoom: 1.49,
+          dpi: 100,
+          footerSpacing: 0,
+          noOutline: false,
+          marginTop: 1,
+          marginLeft: 0,
+          marginRight: 0,
+          marginBottom: 0,
+          pageWidth: 242,
+          pageHeight: 174,
+        };
+      }
+      case 12: {
+        return {
+          enableLocalFileAccess: true,
+          orientation: "Portrait",
+          zoom: 1.49,
+          dpi: 100,
+          footerSpacing: 0,
+          marginTop: 0,
+          marginLeft: 0,
+          marginRight: 0,
+          marginBottom: 0,
+          pageWidth: 175,
+          pageHeight: 318,
+        };
+      }
+      case 13: {
+        return {
+          enableLocalFileAccess: true,
+          zoom: 1.49,
+          dpi: 100,
+          footerSpacing: 0,
+          noOutline: false,
+          marginTop: 2,
+          marginLeft: 0,
+          marginRight: 0,
+          marginBottom: 0,
+          pageWidth: 230,
+          pageHeight: 165,
+        };
+      }
+      case 14: {
+        return {
+          enableLocalFileAccess: true,
+          zoom: 1.49,
+          dpi: 100,
+          footerSpacing: 0,
+          noOutline: false,
+          marginTop: 2,
+          marginLeft: 0,
+          marginRight: 0,
+          marginBottom: 0,
+          pageWidth: 230,
+          pageHeight: 165,
+        };
+      }
+
+      default: {
+        return {
+          enableLocalFileAccess: true,
+          orientation: "Portrait",
+          zoom: 1.49,
+          dpi: 100,
+          footerSpacing: 0,
+          marginTop: 0,
+          marginLeft: 0,
+          marginRight: 0,
+          marginBottom: 0,
+          pageWidth: 175,
+          pageHeight: 318,
+        };
+      }
     }
   };
 
@@ -237,7 +313,7 @@ const getHtml = (typeid) => {
     }
     case 2: {
       return fs.readFileSync(
-        __dirname + "/html/OutstandingCerificate.html",
+        __dirname + "/html/OutstandingCertificate.html",
         "utf-8"
       );
     }
@@ -264,6 +340,30 @@ const getHtml = (typeid) => {
     }
     case 10: {
       return fs.readFileSync(__dirname + "/html/ReportsWOTaxV3.html", "utf-8");
+    }
+    case 11: {
+      return fs.readFileSync(
+        __dirname + "/html/OutstandingCertificateNationals.html",
+        "utf-8"
+      );
+    }
+    case 12: {
+      return fs.readFileSync(
+        __dirname + "/html/ReportsNationals.html",
+        "utf-8"
+      );
+    }
+    case 13: {
+      return fs.readFileSync(
+        __dirname + "/html/NationalsParticipationCertificate.html",
+        "utf-8"
+      );
+    }
+    case 14: {
+      return fs.readFileSync(
+        __dirname + "/html/NationalsParticipationCertificateV2.html",
+        "utf-8"
+      );
     }
 
     default: {
@@ -317,7 +417,7 @@ app.post("/api/upload-html", async (req, res) => {
         const fileWritingPromises = [];
 
         pdfBuffers.forEach(({ buffer, index }) => {
-          const pdfFilename = `${tempDir}/${CSVData[index].name}.pdf`;
+          const pdfFilename = `${tempDir}/${CSVData[index].RegistrationNumber}.pdf`;
           const fileWritePromise = new Promise((resolve, reject) => {
             fs.writeFile(pdfFilename, buffer, (err) => {
               if (err) {
@@ -334,6 +434,13 @@ app.post("/api/upload-html", async (req, res) => {
         Promise.all(fileWritingPromises)
           .then(() => {
             zipArchive.finalize();
+            // fs.rmdir(tempDir, { recursive: true }, (err) => {
+            //   if (err) {
+            //     console.error("Error deleting temporary folder:", err);
+            //   } else {
+            //     console.log("Temporary folder deleted");
+            //   }
+            // });
           })
           .catch((error) => {
             console.error("Error writing files:", error);
@@ -353,21 +460,21 @@ app.post("/api/upload-html", async (req, res) => {
   }
 });
 
-// https
-//   .createServer(
-//     {
-//       key: fs.readFileSync("./certs/server.key"),
-//       cert: fs.readFileSync("./certs/server.cert"),
-//     },
-//     app
-//   )
-//   .on("connection", function (socket) {
-//     socket.setTimeout(10000);
-//   })
-//   .listen(port, function () {
-//     console.log(`server is running on port ${port}`);
-//   });
+https
+  .createServer(
+    {
+      key: fs.readFileSync("./certs/server.key"),
+      cert: fs.readFileSync("./certs/server.cert"),
+    },
+    app
+  )
+  .on("connection", function (socket) {
+    socket.setTimeout(10000);
+  })
+  .listen(port, function () {
+    console.log(`server is running on port ${port}`);
+  });
 
-app.listen(port, function () {
-  console.log(`server is running on ${port}`);
-});
+// app.listen(port, function () {
+//   console.log(`server is running on ${port}`);
+// });
