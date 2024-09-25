@@ -88,16 +88,15 @@ const generateWKPDF = (item, type) => {
         return {
           enableLocalFileAccess: true,
           orientation: "Landscape",
-          zoom: 1.49,
+          zoom: 1.47,
+          marginTop: 5,
+          marginBottom: 1,
+          marginLeft: 3,
+          marginRight: 3,
           dpi: 100,
           footerSpacing: 0,
-          noOutline: false,
-          marginTop: 0,
-          marginLeft: 0,
-          marginRight: 0,
-          marginBottom: 0,
-          pageWidth: 242,
-          pageHeight: 186,
+          pageWidth: 210,
+          pageHeight: 294,
         };
       }
       case 3: {
