@@ -87,6 +87,7 @@ const generateWKPDF = (item, type) => {
       case 2: {
         return {
           enableLocalFileAccess: true,
+          orientation: "Landscape",
           zoom: 1.49,
           dpi: 100,
           footerSpacing: 0,
