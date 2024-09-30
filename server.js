@@ -80,8 +80,8 @@ const generateWKPDF = (item, type) => {
           marginRight: 3,
           dpi: 100,
           footerSpacing: 0,
-          pageWidth: 210,
-          pageHeight: 294,
+          pageWidth: 242,
+          pageHeight: 186,
           footerSpacing: 0,
           noOutline: false,
         };
