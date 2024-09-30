@@ -75,13 +75,15 @@ const generateWKPDF = (item, type) => {
           orientation: "Landscape",
           zoom: 1.47,
           marginTop: 5,
-          marginBottom: 1,
+          marginBottom: 0,
           marginLeft: 3,
           marginRight: 3,
           dpi: 100,
           footerSpacing: 0,
           pageWidth: 210,
           pageHeight: 294,
+          footerSpacing: 0,
+          noOutline: false,
         };
       }
       case 2: {
