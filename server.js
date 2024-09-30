@@ -72,31 +72,31 @@ const generateWKPDF = (item, type) => {
       case 1: {
         return {
           enableLocalFileAccess: true,
-          orientation: "Landscape",
-          zoom: 1.47,
-          marginTop: 0,
-          marginBottom: 0,
-          marginLeft: 0,
-          marginRight: 0,
+          zoom: 1.49,
           dpi: 100,
           footerSpacing: 0,
-          pageWidth: 210,
-          pageHeight: 294,
+          noOutline: false,
+          marginTop: 0,
+          marginLeft: 0,
+          marginRight: 0,
+          marginBottom: 0,
+          pageWidth: 242,
+          pageHeight: 186,
         };
       }
       case 2: {
         return {
           enableLocalFileAccess: true,
-          orientation: "Landscape",
-          zoom: 1.47,
-          marginTop: 0,
-          marginBottom: 0,
-          marginLeft: 0,
-          marginRight: 0,
+          zoom: 1.49,
           dpi: 100,
           footerSpacing: 0,
-          pageWidth: 210,
-          pageHeight: 294,
+          noOutline: false,
+          marginTop: 0,
+          marginLeft: 0,
+          marginRight: 0,
+          marginBottom: 0,
+          pageWidth: 242,
+          pageHeight: 186,
         };
       }
       case 3: {
