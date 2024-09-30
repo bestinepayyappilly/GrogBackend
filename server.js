@@ -460,21 +460,21 @@ app.post("/api/upload-html", async (req, res) => {
   }
 });
 
-https
-  .createServer(
-    {
-      key: fs.readFileSync("./certs/server.key"),
-      cert: fs.readFileSync("./certs/server.cert"),
-    },
-    app
-  )
-  .on("connection", function (socket) {
-    socket.setTimeout(10000);
-  })
-  .listen(port, function () {
-    console.log(`server is running on port ${port}`);
-  });
+// https
+//   .createServer(
+//     {
+//       key: fs.readFileSync("./certs/server.key"),
+//       cert: fs.readFileSync("./certs/server.cert"),
+//     },
+//     app
+//   )
+//   .on("connection", function (socket) {
+//     socket.setTimeout(10000);
+//   })
+//   .listen(port, function () {
+//     console.log(`server is running on port ${port}`);
+//   });
 
-// app.listen(port, function () {
-//   console.log(`server is running on ${port}`);
-// });
+app.listen(port, function () {
+  console.log(`server is running on ${port}`);
+});
