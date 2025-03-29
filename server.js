@@ -10,6 +10,8 @@ const archiver = require("archiver");
 var https = require("https");
 const cheerio = require("cheerio");
 const path = require("path");
+const cliProgress = require("cli-progress");
+const colors = require("colors");
 
 const app = express();
 const port = process.env.PORT || 8080;
@@ -173,12 +175,87 @@ async function processPDFBatch(pdfData, typeId, startIdx, batchSize) {
   return results;
 }
 
+// Add this class for time tracking
+class ProcessTracker {
+  constructor(totalItems) {
+    this.startTime = Date.now();
+    this.totalItems = totalItems;
+    this.processedItems = 0;
+
+    // Create a multibar container
+    this.multibar = new cliProgress.MultiBar({
+      clearOnComplete: false,
+      hideCursor: true,
+      format:
+        "{bar} {percentage}% | {value}/{total} PDFs | ETA: {eta_formatted} | Elapsed: {duration_formatted}",
+      barCompleteChar: "\u2588",
+      barIncompleteChar: "\u2591",
+    });
+
+    // Add the main progress bar
+    this.mainBar = this.multibar.create(totalItems, 0, {
+      eta_formatted: "calculating...",
+      duration_formatted: "0s",
+    });
+  }
+
+  update(count = 1) {
+    this.processedItems += count;
+    const elapsedTime = (Date.now() - this.startTime) / 1000; // in seconds
+    const itemsPerSecond = this.processedItems / elapsedTime;
+    const remainingItems = this.totalItems - this.processedItems;
+    const eta = remainingItems / itemsPerSecond;
+
+    // Format duration
+    const duration_formatted = this.formatTime(elapsedTime);
+    // Format ETA
+    const eta_formatted = this.formatTime(eta);
+
+    this.mainBar.update(this.processedItems, {
+      eta_formatted,
+      duration_formatted,
+    });
+  }
+
+  formatTime(seconds) {
+    if (isNaN(seconds) || !isFinite(seconds)) return "calculating...";
+
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+
+    const parts = [];
+    if (hrs > 0) parts.push(`${hrs}h`);
+    if (mins > 0) parts.push(`${mins}m`);
+    parts.push(`${secs}s`);
+
+    return parts.join(" ");
+  }
+
+  stop() {
+    this.multibar.stop();
+  }
+}
+
 app.post("/api/upload-html", async (req, res) => {
   const tempDir = "temp_pdfs";
+  const errorLog = {
+    failedPDFs: [],
+    totalAttempted: 0,
+    successCount: 0,
+    failureCount: 0,
+  };
+
+  let tracker;
 
   try {
     const { typeId } = req.body;
     const pdfData = generatePDF(getHtml(typeId));
+    errorLog.totalAttempted = pdfData.length;
+
+    // Initialize progress tracker
+    console.log("\nStarting PDF generation process...".cyan);
+    tracker = new ProcessTracker(pdfData.length);
 
     // Ensure temp directory exists
     if (!fs.existsSync(tempDir)) {
@@ -219,24 +296,40 @@ app.post("/api/upload-html", async (req, res) => {
 
       // Add successful PDFs to zip as they're generated
       for (const result of batchResults) {
+        // Update progress bar
+        tracker.update();
+
         if (result.success) {
+          errorLog.successCount++;
           const pdfFilename = `${tempDir}/${CSVData[result.index].name}.pdf`;
           await fs.promises.writeFile(pdfFilename, result.buffer);
           zipArchive.file(pdfFilename);
+        } else {
+          errorLog.failureCount++;
+          errorLog.failedPDFs.push({
+            name: CSVData[result.index].name,
+            error: result.error,
+          });
         }
       }
     }
 
-    // Check for failures
-    const failures = allResults.filter((result) => !result.success);
-    if (failures.length > 0) {
-      console.warn(`Failed to generate ${failures.length} PDFs`);
-      // Continue anyway - we'll zip the successful ones
+    // Stop the progress bar
+    tracker.stop();
+
+    // Print final summary
+    console.log("\nGeneration Complete!".green);
+    console.log(`Successfully generated: ${errorLog.successCount}`.green);
+    if (errorLog.failureCount > 0) {
+      console.log(`Failed to generate: ${errorLog.failureCount}`.red);
     }
 
     await zipArchive.finalize();
   } catch (error) {
-    console.error("Error processing request:", error);
+    // Stop the progress bar if there's an error
+    if (tracker) tracker.stop();
+
+    console.error("\nError processing request:".red, error);
     // Clean up temp directory on error
     if (fs.existsSync(tempDir)) {
       const files = fs.readdirSync(tempDir);
