@@ -16,8 +16,8 @@
     "pg": "^8.11.3",
     "phantom-html-to-pdf": "^0.8.3",
     "phantomjs-prebuilt": "^2.1.16",
-    "puppeteer": "^21.1.0",
-    "rimraf": "^5.0.5",
-    "wkhtmltopdf": "^0.4.0"
+    "puppeteer": "^24.4.0",
+    "puppeteer-core": "^24.4.0",
+    "rimraf": "^5.0.5"
   }
 }
