@@ -75,7 +75,7 @@ function getPageConfig(type) {
     case 2:
       return {
         width: "242mm",
-        height: "186mm",
+        height: "160mm",
         margin: { top: "0mm", right: "0mm", bottom: "0mm", left: "0mm" },
       };
     case 3:
@@ -130,17 +130,13 @@ async function generatePDFWithPuppeteer(html, type) {
       "--disable-dev-shm-usage",
       "--disable-gpu",
     ],
-    timeout: 60000, // Increase timeout to 60 seconds
-    executablePath:
-      process.platform === "darwin"
-        ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-        : puppeteer.executablePath(),
+    timeout: 120000, // Increased timeout to 120 seconds
   });
 
   try {
     const page = await browser.newPage();
-    await page.setDefaultNavigationTimeout(60000); // Increase navigation timeout
-    await page.setContent(html, { waitUntil: "networkidle0", timeout: 60000 });
+    await page.setDefaultNavigationTimeout(120000); // Increased navigation timeout
+    await page.setContent(html, { waitUntil: "networkidle0", timeout: 120000 });
 
     const config = getPageConfig(type);
     const pdf = await page.pdf({
@@ -159,6 +155,24 @@ async function generatePDFWithPuppeteer(html, type) {
   }
 }
 
+// Helper function to process PDFs in batches
+async function processPDFBatch(pdfData, typeId, startIdx, batchSize) {
+  const batch = pdfData.slice(startIdx, startIdx + batchSize);
+  const results = [];
+
+  for (const item of batch) {
+    try {
+      const buffer = await generatePDFWithPuppeteer(item.html, typeId);
+      results.push({ buffer, index: item.index, success: true });
+    } catch (error) {
+      console.error(`Error generating PDF for index ${item.index}:`, error);
+      results.push({ index: item.index, success: false, error: error.message });
+    }
+  }
+
+  return results;
+}
+
 app.post("/api/upload-html", async (req, res) => {
   const tempDir = "temp_pdfs";
 
@@ -172,28 +186,9 @@ app.post("/api/upload-html", async (req, res) => {
     }
 
     // Clean up old files
-    const files = fs.readdirSync(tempDir);
-    for (const file of files) {
+    const oldFiles = fs.readdirSync(tempDir);
+    for (const file of oldFiles) {
       fs.unlinkSync(`${tempDir}/${file}`);
-    }
-
-    // Generate PDFs with better error handling
-    const pdfBuffers = await Promise.all(
-      pdfData.map(async ({ html, index }) => {
-        try {
-          const buffer = await generatePDFWithPuppeteer(html, typeId);
-          return { buffer, index, success: true };
-        } catch (error) {
-          console.error(`Error generating PDF for index ${index}:`, error);
-          return { index, success: false, error: error.message };
-        }
-      })
-    );
-
-    // Check if any PDFs failed to generate
-    const failures = pdfBuffers.filter((result) => !result.success);
-    if (failures.length > 0) {
-      throw new Error(`Failed to generate ${failures.length} PDFs`);
     }
 
     const zipArchive = archiver("zip", {
@@ -204,15 +199,39 @@ app.post("/api/upload-html", async (req, res) => {
       throw err;
     });
 
+    // Set up response
     res.contentType("application/zip");
     res.attachment("pdfs.zip");
     zipArchive.pipe(res);
 
-    // Add files to zip
-    for (const { buffer, index } of pdfBuffers) {
-      const pdfFilename = `${tempDir}/${CSVData[index].RegistrationNumber}.pdf`;
-      await fs.promises.writeFile(pdfFilename, buffer);
-      zipArchive.file(pdfFilename);
+    // Process PDFs in batches of 10
+    const BATCH_SIZE = 10;
+    const allResults = [];
+
+    for (let i = 0; i < pdfData.length; i += BATCH_SIZE) {
+      const batchResults = await processPDFBatch(
+        pdfData,
+        typeId,
+        i,
+        BATCH_SIZE
+      );
+      allResults.push(...batchResults);
+
+      // Add successful PDFs to zip as they're generated
+      for (const result of batchResults) {
+        if (result.success) {
+          const pdfFilename = `${tempDir}/${CSVData[result.index].name}.pdf`;
+          await fs.promises.writeFile(pdfFilename, result.buffer);
+          zipArchive.file(pdfFilename);
+        }
+      }
+    }
+
+    // Check for failures
+    const failures = allResults.filter((result) => !result.success);
+    if (failures.length > 0) {
+      console.warn(`Failed to generate ${failures.length} PDFs`);
+      // Continue anyway - we'll zip the successful ones
     }
 
     await zipArchive.finalize();
@@ -224,6 +243,7 @@ app.post("/api/upload-html", async (req, res) => {
       for (const file of files) {
         fs.unlinkSync(`${tempDir}/${file}`);
       }
+      fs.rmdirSync(tempDir);
     }
     res.status(500).send(`Error processing request: ${error.message}`);
   }
