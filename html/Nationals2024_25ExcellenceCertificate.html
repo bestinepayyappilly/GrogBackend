@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=Cardo:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Cardo', serif;
+            font-size: 18px;
+            
+            line-height: normal;
+            letter-spacing: normal;
+        }
+
+        .page-wrapper {
+            display: flex;
+            width: 100%;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .certificate-container {
+            width: 885px;
+            height: 623px;
+            position: relative;
+            background-color: #FFF;
+            box-sizing: border-box;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 42px 21px 45px 20px;
+            text-align: center;
+            background-image: url('{{borderImage}}');
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: 100% 100%;
+        }
+
+        .header-content {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            justify-content: flex-start;
+            gap: 24px;
+            max-width: 100%;
+            margin-bottom: 20px;
+            margin-left: 30px;
+        }
+
+        .logo-container {
+            align-self: stretch;
+            display: flex;
+            flex-direction: row;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 0px 20px 0px 21px;
+        }
+
+        .nfo-logo {
+            height: 87.5px;
+            position: relative;
+        }
+
+        .certificate-title {
+            margin: 0;
+            align-self: center;
+            position: relative;
+            font-size: 48px;
+            line-height: 92%;
+            font-weight: 700;
+            color: '#307E0B';
+            text-align: center;
+            width: 100%;
+        }
+
+        .certificate-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 0 22px;
+            width: 100%;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .student-name {
+            margin: 0;
+            font-weight: 700;
+            width: 700px;
+            text-align: center;
+            word-wrap: break-word;
+            padding: 0px 0;
+            color: #000;
+            font-size: 40px;
+        }
+
+        .school-info {
+            line-height: 120%;
+            font-style: italic;
+            text-align: center;
+            width: 100%;
+            color: #000;
+        }
+
+        .rank-info, .exam-date {
+            line-height: 90%;
+            text-align: center;
+            width: 100%;
+            color: #000;
+        }
+
+        .signatures-container {
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            width: 100%;
+            color: #000;
+        }
+
+        .signature-block {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 0px 6px 0px 0px;
+            box-sizing: border-box;
+            font-size: 13.8px;
+        }
+
+        .signature-block.left {
+            margin-left: 76px;
+        }
+
+        .signature-block.right {
+            margin-right: 76px;
+        }
+
+        .signature-image {
+            object-fit: contain;
+            height: 50px;
+        }
+
+        .signature-image.cashfree {
+            width: 60px;
+        }
+
+        .signature-image.streak {
+            width: 100px;
+        }
+
+        .signature-name {
+            display: flex;
+            padding: 0 28px;
+            font-weight: 700;
+            line-height: 19px;
+            min-width: 71px;
+        }
+
+        .signature-title {
+            line-height: 19px;
+            min-width: 128px;
+        }
+
+        .student-name.large { font-size: 60px; }
+        .student-name.medium { font-size: 40px; }
+        .student-name.small { font-size: 30px; }
+    </style>
+</head>
+<body>
+    <div class="page-wrapper">
+        <div class="certificate-container">
+            <div class="header-content">
+                <div class="logo-container">
+                    <img class="nfo-logo" alt="NFO Logo" loading="lazy" src="{{logoImage}}"/>
+                </div>
+                <div style="color: #307E0B;">
+                    <div class="certificate-title">
+                        Certificate of<br>National Excellence
+                    </div>
+                    <div class="certificate-content">
+                        <b style="line-height: 25px; margin-top: 20px; color: #000;">This is to certify that</b>
+
+                        <h1 class="student-name">{{name}}</h1>
+
+                        <i class="school-info">
+                            Of grade {{grade}} from {{school}}
+                        </i>
+
+                        <div class="rank-info">
+                            achieved All India Rank {{nationalRank}} in the National level (Level II) of the
+                        </div>
+
+                        <div class="exam-date">
+                            National Finance Olympiad held between 1st - 2nd February 2025
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="signatures-container">
+                <div class="signature-block left">
+                    <img class="signature-image cashfree" alt="CashFree Signature" src="{{cashfreeSignature}}"/>
+                    <div>
+                        <div class="signature-name">Reeju Datta</div>
+                        <div class="signature-title">Co-founder, Cashfree</div>
+                    </div>
+                </div>
+                <div class="signature-block right">
+                    <img class="signature-image streak" alt="Streak Signature" src="{{streakSignature}}"/>
+                    <div>
+                        <div class="signature-name">Shiv Bidani</div>
+                        <div class="signature-title">Co-founder, Streak</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
