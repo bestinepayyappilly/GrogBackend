@@ -366,7 +366,8 @@ app.post("/api/upload-html", async (req, res) => {
 
         if (result.success) {
           errorLog.successCount++;
-          const fileName = CSVData[result.index].name || `pdf_${result.index}`; // Fallback if name is undefined
+          const fileName =
+            CSVData[result.index].student_username || `pdf_${result.index}`; // Fallback if name is undefined
           const pdfFilename = `${tempDir}/${fileName}.pdf`;
           await fs.promises.writeFile(pdfFilename, result.buffer);
           zipArchive.file(pdfFilename, { name: `${fileName}.pdf` }); // Specify name in archive
