@@ -110,14 +110,38 @@ function getPageConfig(type) {
 
     case 15:
       return {
-        width: "4260px",
-        height: "650px",
+        width: "250mm",
+        height: "160mm",
+        margin: { top: "2mm", right: "2mm", bottom: "2mm", left: "2mm" },
+      };
+    case 16:
+      return {
+        width: "250mm",
+        height: "160mm",
+        margin: { top: "2mm", right: "2mm", bottom: "2mm", left: "2mm" },
+      };
+    case 17:
+      return {
+        width: "250mm",
+        height: "160mm",
+        margin: { top: "2mm", right: "2mm", bottom: "2mm", left: "2mm" },
+      };
+    case 18:
+      return {
+        width: "250mm",
+        height: "160mm",
+        margin: { top: "2mm", right: "2mm", bottom: "2mm", left: "2mm" },
+      };
+    case 19:
+      return {
+        width: "250mm",
+        height: "160mm",
         margin: { top: "2mm", right: "2mm", bottom: "2mm", left: "2mm" },
       };
     default:
       return {
-        width: "175mm",
-        height: "318mm",
+        width: "250mm",
+        height: "250mm",
         margin: { top: "0mm", right: "0mm", bottom: "0mm", left: "0mm" },
       };
   }
@@ -181,39 +205,57 @@ class ProcessTracker {
     this.startTime = Date.now();
     this.totalItems = totalItems;
     this.processedItems = 0;
+    this.recentTimes = []; // Store recent processing times for better averaging
 
     // Create a multibar container
     this.multibar = new cliProgress.MultiBar({
       clearOnComplete: false,
       hideCursor: true,
       format:
-        "{bar} {percentage}% | {value}/{total} PDFs | ETA: {eta_formatted} | Elapsed: {duration_formatted}",
-      barCompleteChar: "\u2588",
-      barIncompleteChar: "\u2591",
+        "[{bar}] {percentage}% | {value}/{total} PDFs | Speed: {speed} | ETA: {eta} | Elapsed: {duration}",
+      barCompleteChar: "█",
+      barIncompleteChar: "░",
     });
 
     // Add the main progress bar
     this.mainBar = this.multibar.create(totalItems, 0, {
-      eta_formatted: "calculating...",
-      duration_formatted: "0s",
+      eta: "calculating...",
+      duration: "0s",
+      speed: "0 PDFs/min",
     });
+
+    // Store last update time for speed calculation
+    this.lastUpdateTime = Date.now();
   }
 
   update(count = 1) {
-    this.processedItems += count;
-    const elapsedTime = (Date.now() - this.startTime) / 1000; // in seconds
-    const itemsPerSecond = this.processedItems / elapsedTime;
-    const remainingItems = this.totalItems - this.processedItems;
-    const eta = remainingItems / itemsPerSecond;
+    const currentTime = Date.now();
+    const timeSinceLastUpdate = (currentTime - this.lastUpdateTime) / 1000; // in seconds
+    this.lastUpdateTime = currentTime;
 
-    // Format duration
-    const duration_formatted = this.formatTime(elapsedTime);
-    // Format ETA
-    const eta_formatted = this.formatTime(eta);
+    // Store processing time for this batch
+    this.recentTimes.push(timeSinceLastUpdate);
+    // Keep only last 5 times for averaging
+    if (this.recentTimes.length > 5) {
+      this.recentTimes.shift();
+    }
+
+    this.processedItems += count;
+    const elapsedTime = (currentTime - this.startTime) / 1000; // in seconds
+
+    // Calculate average time per item using recent times
+    const avgTimePerItem =
+      this.recentTimes.reduce((a, b) => a + b, 0) / this.recentTimes.length;
+    const remainingItems = this.totalItems - this.processedItems;
+    const estimatedRemainingTime = avgTimePerItem * remainingItems;
+
+    // Calculate speed (PDFs per minute)
+    const speed = Math.round((this.processedItems / elapsedTime) * 60);
 
     this.mainBar.update(this.processedItems, {
-      eta_formatted,
-      duration_formatted,
+      eta: this.formatTime(estimatedRemainingTime),
+      duration: this.formatTime(elapsedTime),
+      speed: `${speed} PDFs/min`,
     });
   }
 
@@ -262,7 +304,7 @@ app.post("/api/upload-html", async (req, res) => {
       fs.mkdirSync(tempDir, { recursive: true });
     }
 
-    // Clean up old files
+    // Clean up old files before starting new generation
     const oldFiles = fs.readdirSync(tempDir);
     for (const file of oldFiles) {
       fs.unlinkSync(`${tempDir}/${file}`);
@@ -276,9 +318,33 @@ app.post("/api/upload-html", async (req, res) => {
       throw err;
     });
 
-    // Set up response
+    // Set up response and cleanup after response is finished
     res.contentType("application/zip");
     res.attachment("pdfs.zip");
+
+    // Handle cleanup after response is complete
+    res.on("finish", () => {
+      console.log("Cleaning up temporary files...");
+      if (fs.existsSync(tempDir)) {
+        fs.readdir(tempDir, (err, files) => {
+          if (err) {
+            console.error("Error reading temp directory:", err);
+            return;
+          }
+          files.forEach((file) => {
+            fs.unlink(path.join(tempDir, file), (err) => {
+              if (err) console.error(`Error deleting file ${file}:`, err);
+            });
+          });
+          // Remove directory after files are deleted
+          fs.rmdir(tempDir, (err) => {
+            if (err) console.error("Error removing temp directory:", err);
+            else console.log("Cleanup completed successfully");
+          });
+        });
+      }
+    });
+
     zipArchive.pipe(res);
 
     // Process PDFs in batches of 10
@@ -296,14 +362,14 @@ app.post("/api/upload-html", async (req, res) => {
 
       // Add successful PDFs to zip as they're generated
       for (const result of batchResults) {
-        // Update progress bar
         tracker.update();
 
         if (result.success) {
           errorLog.successCount++;
-          const pdfFilename = `${tempDir}/${CSVData[result.index].name}.pdf`;
+          const fileName = CSVData[result.index].name || `pdf_${result.index}`; // Fallback if name is undefined
+          const pdfFilename = `${tempDir}/${fileName}.pdf`;
           await fs.promises.writeFile(pdfFilename, result.buffer);
-          zipArchive.file(pdfFilename);
+          zipArchive.file(pdfFilename, { name: `${fileName}.pdf` }); // Specify name in archive
         } else {
           errorLog.failureCount++;
           errorLog.failedPDFs.push({
@@ -324,13 +390,13 @@ app.post("/api/upload-html", async (req, res) => {
       console.log(`Failed to generate: ${errorLog.failureCount}`.red);
     }
 
+    // Finalize zip archive
     await zipArchive.finalize();
   } catch (error) {
-    // Stop the progress bar if there's an error
     if (tracker) tracker.stop();
-
     console.error("\nError processing request:".red, error);
-    // Clean up temp directory on error
+
+    // Clean up on error
     if (fs.existsSync(tempDir)) {
       const files = fs.readdirSync(tempDir);
       for (const file of files) {
@@ -474,6 +540,138 @@ const getHtml = (typeid) => {
           __dirname,
           "public/cert-assets/StreakCoFounderSignatureZonal.png"
         )
+      );
+
+      // Replace image paths with base64 strings
+      template = template
+        .replace("{{borderImage}}", borderImage)
+        .replace("{{logoImage}}", logoImage)
+        .replace("{{cashfreeSignature}}", cashfreeSignature)
+        .replace("{{streakSignature}}", streakSignature);
+
+      return template;
+    }
+    case 16: {
+      template = fs.readFileSync(
+        __dirname + "/html/Nationals2024_25ExcellenceCertificate.html",
+        "utf-8"
+      );
+
+      // Get base64 strings for all images
+      const borderImage = getBase64Image(
+        path.join(
+          __dirname,
+          "public/cert-assets/NationalsExcellenceCertificateBorder.png"
+        )
+      );
+      const logoImage = getBase64Image(
+        path.join(__dirname, "public/cert-assets/vector.png")
+      );
+      const cashfreeSignature = getBase64Image(
+        path.join(__dirname, "public/cert-assets/CashfreeFounderExcellence.png")
+      );
+      const streakSignature = getBase64Image(
+        path.join(
+          __dirname,
+          "public/cert-assets/StreakCoFounderSignatureExcellence.png"
+        )
+      );
+
+      // Replace image paths with base64 strings
+      template = template
+        .replace("{{borderImage}}", borderImage)
+        .replace("{{logoImage}}", logoImage)
+        .replace("{{cashfreeSignature}}", cashfreeSignature)
+        .replace("{{streakSignature}}", streakSignature);
+
+      return template;
+    }
+    case 17: {
+      template = fs.readFileSync(
+        __dirname +
+          "/html/Nationals2024_25OutstandingPerformanceCertificate.html",
+        "utf-8"
+      );
+
+      // Get base64 strings for all images
+      const borderImage = getBase64Image(
+        path.join(
+          __dirname,
+          "public/cert-assets/NationalsOutstandingCertificateBorder.png"
+        )
+      );
+      const logoImage = getBase64Image(
+        path.join(__dirname, "public/cert-assets/vector.png")
+      );
+      const cashfreeSignature = getBase64Image(
+        path.join(
+          __dirname,
+          "public/cert-assets/CashFreeFounderOutstanding.png"
+        )
+      );
+      const streakSignature = getBase64Image(
+        path.join(
+          __dirname,
+          "public/cert-assets/StreakCoFounderSignatureOutstanding.png"
+        )
+      );
+
+      // Replace image paths with base64 strings
+      template = template
+        .replace("{{borderImage}}", borderImage)
+        .replace("{{logoImage}}", logoImage)
+        .replace("{{cashfreeSignature}}", cashfreeSignature)
+        .replace("{{streakSignature}}", streakSignature);
+
+      return template;
+    }
+    case 18: {
+      template = fs.readFileSync(
+        __dirname + "/html/Nationals2024_25TeachersCertificate.html",
+        "utf-8"
+      );
+
+      // Get base64 strings for all images
+      const borderImage = getBase64Image(
+        path.join(__dirname, "public/cert-assets/NationalTeachersBorder.png")
+      );
+      const logoImage = getBase64Image(
+        path.join(__dirname, "public/cert-assets/vector.png")
+      );
+      const cashfreeSignature = getBase64Image(
+        path.join(__dirname, "public/cert-assets/CashfreeCoFounderTeachers.png")
+      );
+      const streakSignature = getBase64Image(
+        path.join(__dirname, "public/cert-assets/StreakCoFounderTeachers.png")
+      );
+
+      // Replace image paths with base64 strings
+      template = template
+        .replace("{{borderImage}}", borderImage)
+        .replace("{{logoImage}}", logoImage)
+        .replace("{{cashfreeSignature}}", cashfreeSignature)
+        .replace("{{streakSignature}}", streakSignature);
+
+      return template;
+    }
+    case 19: {
+      template = fs.readFileSync(
+        __dirname + "/html/Nationals2024_25PrincipalCertificate.html",
+        "utf-8"
+      );
+
+      // Get base64 strings for all images
+      const borderImage = getBase64Image(
+        path.join(__dirname, "public/cert-assets/NationalTeachersBorder.png")
+      );
+      const logoImage = getBase64Image(
+        path.join(__dirname, "public/cert-assets/vector.png")
+      );
+      const cashfreeSignature = getBase64Image(
+        path.join(__dirname, "public/cert-assets/CashfreeCoFounderTeachers.png")
+      );
+      const streakSignature = getBase64Image(
+        path.join(__dirname, "public/cert-assets/StreakCoFounderTeachers.png")
       );
 
       // Replace image paths with base64 strings
