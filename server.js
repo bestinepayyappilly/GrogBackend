@@ -47,13 +47,47 @@ async function convertHTMLToPDF(htmlString) {
   return pdf;
 }
 
-const generatePDF = (template) => {
-  const data = CSVData.map((item, index) => {
-    const generatedHtml = generateHTML(item, template);
-    return { html: generatedHtml, index };
-  });
+const generatePDF = async (html) => {
+  try {
+    const browser = await puppeteer.launch({
+      headless: "new",
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      defaultViewport: {
+        width: 1024,
+        height: 1440,
+      },
+    });
 
-  return data;
+    const page = await browser.newPage();
+
+    // Set longer timeout and wait for network idle
+    await page.setDefaultNavigationTimeout(60000);
+    await page.setContent(html, {
+      waitUntil: ["networkidle0", "domcontentloaded"],
+      timeout: 60000,
+    });
+
+    // Wait for fonts to load
+    await page.evaluateHandle("document.fonts.ready");
+
+    const pdf = await page.pdf({
+      format: "A4",
+      printBackground: true,
+      margin: {
+        top: "20px",
+        right: "20px",
+        bottom: "20px",
+        left: "20px",
+      },
+      preferCSSPageSize: true,
+    });
+
+    await browser.close();
+    return pdf;
+  } catch (error) {
+    console.error("Error in PDF generation:", error);
+    throw new Error(`PDF generation failed: ${error.message}`);
+  }
 };
 
 app.post("/api/upload_csv", (req, res) => {
@@ -138,6 +172,15 @@ function getPageConfig(type) {
         height: "160mm",
         margin: { top: "2mm", right: "2mm", bottom: "2mm", left: "2mm" },
       };
+    case 20:
+      return {
+        width: "297mm",
+        height: "210mm",
+        margin: { top: "10mm", right: "10mm", bottom: "10mm", left: "10mm" },
+        printBackground: true,
+        format: "A4",
+        portrait: true,
+      };
     default:
       return {
         width: "250mm",
@@ -168,9 +211,11 @@ async function generatePDFWithPuppeteer(html, type) {
     const pdf = await page.pdf({
       ...config,
       printBackground: true,
-      scale: 1.25,
+      scale: 1.35,
       format: "A4",
-      landscape: true,
+      landscape: false,
+      width: "210mm",
+      height: "297mm",
     });
 
     return pdf;
@@ -409,15 +454,73 @@ app.post("/api/upload-html", async (req, res) => {
   }
 });
 
-function getBase64Image(filepath) {
+// Add this at the start of your server.js
+const setupRequiredDirectories = () => {
+  // Create all required directories
+  const dirs = [
+    path.join(__dirname, "reports"),
+    path.join(__dirname, "reports/debug"),
+    path.join(__dirname, "generated-reports"),
+    path.join(__dirname, "public/cert-assets"),
+    path.join(__dirname, "public/fonts"),
+  ];
+
+  dirs.forEach((dir) => {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+  });
+};
+
+// Modified getBase64Image and getBase64Font functions with error handling
+const getBase64Image = (filepath) => {
   try {
-    const image = fs.readFileSync(filepath);
-    return `data:image/png;base64,${image.toString("base64")}`;
+    if (!fs.existsSync(filepath)) {
+      console.warn(`Image not found: ${filepath}`);
+      return "";
+    }
+
+    const file = fs.readFileSync(filepath);
+    const extension = path.extname(filepath).toLowerCase();
+
+    // Set correct MIME type based on file extension
+    let mimeType;
+    switch (extension) {
+      case ".svg":
+        mimeType = "image/svg+xml";
+        break;
+      case ".png":
+        mimeType = "image/png";
+        break;
+      case ".jpg":
+      case ".jpeg":
+        mimeType = "image/jpeg";
+        break;
+      default:
+        console.warn(`Unsupported image type: ${extension}`);
+        return "";
+    }
+
+    return `data:${mimeType};base64,${file.toString("base64")}`;
   } catch (error) {
     console.error(`Error reading image ${filepath}:`, error);
     return "";
   }
-}
+};
+
+const getBase64Font = (filepath) => {
+  try {
+    if (!fs.existsSync(filepath)) {
+      console.warn(`Font not found: ${filepath}`);
+      return ""; // Return empty string if file doesn't exist
+    }
+    const font = fs.readFileSync(filepath);
+    return `data:font/ttf;base64,${font.toString("base64")}`;
+  } catch (error) {
+    console.error(`Error reading font ${filepath}:`, error);
+    return ""; // Return empty string on error
+  }
+};
 
 const getHtml = (typeid) => {
   let template;
@@ -684,7 +787,22 @@ const getHtml = (typeid) => {
 
       return template;
     }
+    case 20: {
+      template = fs.readFileSync(
+        __dirname + "/html/SchoolReportNew.html",
+        "utf-8"
+      );
 
+      // Get base64 string for vector.png
+      const logoImage = getBase64Image(
+        path.join(__dirname, "public/cert-assets/vector.png")
+      );
+
+      // Replace logoPath in template with base64 image
+      template = template.replace("{{logoPath}}", logoImage);
+
+      return template;
+    }
     default: {
       template = fs.readFileSync(
         __dirname + "/html/ReportsWOTax.html",
@@ -695,6 +813,267 @@ const getHtml = (typeid) => {
 
   return template;
 };
+
+// Modify your existing generate-school-report route
+app.post("/api/generate-school-report", async (req, res) => {
+  try {
+    const schoolsData = req.body;
+    const reports = [];
+
+    // Create date-based folder structure
+    const today = new Date();
+    const dateFolder = `${today.getFullYear()}-${(today.getMonth() + 1)
+      .toString()
+      .padStart(2, "0")}-${today.getDate().toString().padStart(2, "0")}`;
+    const timeStamp = `${today.getHours().toString().padStart(2, "0")}-${today
+      .getMinutes()
+      .toString()
+      .padStart(2, "0")}`;
+
+    // Create base reports directory and date subdirectory
+    const reportsBaseDir = path.join(__dirname, "school-reports");
+    const dateDir = path.join(reportsBaseDir, dateFolder);
+    const batchDir = path.join(dateDir, timeStamp);
+
+    // Create directories if they don't exist
+    [reportsBaseDir, dateDir, batchDir].forEach((dir) => {
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+    });
+
+    // Handle both single school and batch of schools
+    const schoolsToProcess = Array.isArray(schoolsData.response)
+      ? schoolsData.response
+      : [schoolsData];
+
+    for (const schoolData of schoolsToProcess) {
+      try {
+        // Transform the data for the template
+        const transformedData = {
+          schoolName: schoolData.schoolName,
+          zone: schoolData.zone,
+          levelASchoolAverage: schoolData.levelASchoolAverage,
+          levelANationalAverage: schoolData.levelANationalAverage,
+          levelAZoneAverage: schoolData.levelAZoneAverage,
+          levelBSchoolAverage: schoolData.levelBSchoolAverage,
+          levelBZoneAverage: schoolData.levelBZoneAverage,
+          levelBNationalAverage: schoolData.levelBNationalAverage,
+          studentsResultDeclared: schoolData.studentsResultDeclared,
+          studentsregistered: schoolData.studentsregistered,
+          participationPercentage: schoolData.participationPercentage,
+          outperformed: schoolData.outperformed,
+
+          // Level 1 data with proper mapping
+          level1: {
+            "Batch Grade 6 - 8": (
+              schoolData.level1["Batch Grade 6 - 8"] || []
+            ).map((student) => ({
+              "Student Roll No": student["Student Roll No"],
+              Name: student.Name ? student.Name.toUpperCase() : "-",
+              Class: student.Class,
+              "Total Score": student.Total + "%",
+              "Batch Rank": student["Batch Rank"],
+              "AIR*": student["All India Rank"],
+            })),
+            "Batch Grade 9 - 10": (
+              schoolData.level1["Batch Grade 9 - 10"] || []
+            ).map((student) => ({
+              "Student Roll No": student["Student Roll No"],
+              Name: student.Name ? student.Name.toUpperCase() : "-",
+              Class: student.Class,
+              "Total Score": student.Total + "%",
+              "Batch Rank": student["Batch Rank"],
+              "AIR*": student["All India Rank"],
+            })),
+            "Batch Grade 11 - 12": (
+              schoolData.level1["Batch Grade 11 - 12"] || []
+            ).map((student) => ({
+              "Student Roll No": student["Student Roll No"],
+              Name: student.Name ? student.Name.toUpperCase() : "-",
+              Class: student.Class,
+              "Total Score": student.Total + "%",
+              "Batch Rank": student["Batch Rank"],
+              "AIR*": student["All India Rank"],
+            })),
+          },
+
+          // Level 2 data with proper mapping
+          level2: {
+            "Batch Grade 6 - 8": (() => {
+              const transformed = (
+                schoolData.level2["Batch Grade 6 - 8"] || []
+              ).map((student) => ({
+                "Student Roll No": student["Student Roll No"] || "-",
+                Name: student.Name ? student.Name.toUpperCase() : "-",
+                Class: student.Class || "-",
+                "Total Score": student.Total + "%",
+                "Zonal Rank": student["Zonal Rank"],
+                "AIR*": student["All India Rank"],
+              }));
+              console.log("Complete Grade 6-8 transformed:", transformed);
+              return transformed;
+            })(),
+
+            "Batch Grade 9 - 10": (() => {
+              const transformed = (
+                schoolData.level2["Batch Grade 9 - 10"] || []
+              ).map((student) => ({
+                "Student Roll No": student["Student Roll No"] || "-",
+                Name: student.Name ? student.Name.toUpperCase() : "-",
+                Class: student.Class || "-",
+                "Total Score": student.Total + "%",
+                "Zonal Rank": student["Zonal Rank"],
+                "AIR*": student["All India Rank"],
+              }));
+              console.log("Complete Grade 9-10 transformed:", transformed);
+              return transformed;
+            })(),
+
+            "Batch Grade 11 - 12": (() => {
+              const transformed = (
+                schoolData.level2["Batch Grade 11 - 12"] || []
+              ).map((student) => ({
+                "Student Roll No": student["Student Roll No"] || "-",
+                Name: student.Name ? student.Name.toUpperCase() : "-",
+                Class: student.Class || "-",
+                "Total Score": student.Total + "%",
+                "Zonal Rank": student["Zonal Rank"],
+                "AIR*": student["All India Rank"],
+              }));
+              console.log("Complete Grade 11-12 transformed:", transformed);
+              return transformed;
+            })(),
+          },
+
+          topPerformers: schoolData.topPerformers,
+
+          // Asset paths
+          logoPath: getBase64Image(path.join(__dirname, "public/vector.svg")),
+          vectorIcon: getBase64Image(path.join(__dirname, "public/Vector.png")),
+          statsIcon: getBase64Image(
+            path.join(__dirname, "public/material-symbols_trophy.png")
+          ),
+          backgroundImage: getBase64Image(
+            path.join(__dirname, "public/cert-assets/background.png")
+          ),
+
+          // Font paths
+          oggTextBook: getBase64Font(
+            path.join(__dirname, "public/fonts/OggText-Book.ttf")
+          ),
+          oggTextLight: getBase64Font(
+            path.join(__dirname, "public/fonts/OggText-Light.ttf")
+          ),
+          oggTextBold: getBase64Font(
+            path.join(__dirname, "public/fonts/OggText-Bold.ttf")
+          ),
+          oggTextMedium: getBase64Font(
+            path.join(__dirname, "public/fonts/OggText-Medium.ttf")
+          ),
+        };
+
+        // Generate HTML
+        const template = fs.readFileSync(
+          path.join(__dirname, "html/SchoolReportNew.html"),
+          "utf8"
+        );
+        const compiledTemplate = Handlebars.compile(template);
+        const html = compiledTemplate(transformedData);
+
+        // Generate PDF
+        const pdf = await generatePDFWithPuppeteer(html);
+
+        // Create sanitized filename
+        const sanitizedSchoolName = schoolData.schoolName
+          .replace(/[^a-zA-Z0-9]/g, "_")
+          .replace(/_+/g, "_")
+          .toLowerCase();
+
+        const fileName = `${sanitizedSchoolName}_report.pdf`;
+        const filePath = path.join(batchDir, fileName);
+
+        // Save PDF
+        fs.writeFileSync(filePath, pdf);
+
+        // Save relative path for response
+        const relativePath = path.relative(__dirname, filePath);
+
+        reports.push({
+          schoolName: schoolData.schoolName,
+          fileName: fileName,
+          filePath: relativePath,
+          status: "success",
+        });
+      } catch (error) {
+        console.error(
+          `Error generating report for ${schoolData.schoolName}:`,
+          error
+        );
+        reports.push({
+          schoolName: schoolData.schoolName,
+          status: "error",
+          error: error.message,
+        });
+      }
+    }
+
+    // Send response with folder information
+    res.json({
+      status: "success",
+      message: "Reports generated successfully",
+      batchInfo: {
+        date: dateFolder,
+        time: timeStamp,
+        path: path.relative(__dirname, batchDir),
+      },
+      reports: reports,
+    });
+  } catch (error) {
+    console.error("Error in report generation:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Error generating reports",
+      error: error.message,
+    });
+  }
+});
+
+// Add this function to clean up old reports
+function cleanupOldReports(directory, maxAgeHours = 24) {
+  fs.readdir(directory, (err, files) => {
+    if (err) {
+      console.error("Error reading reports directory:", err);
+      return;
+    }
+
+    const now = new Date();
+    files.forEach((file) => {
+      const filePath = path.join(directory, file);
+      fs.stat(filePath, (err, stats) => {
+        if (err) {
+          console.error("Error getting file stats:", err);
+          return;
+        }
+
+        const ageHours = (now - stats.mtime) / (1000 * 60 * 60);
+        if (ageHours > maxAgeHours) {
+          fs.unlink(filePath, (err) => {
+            if (err) {
+              console.error("Error deleting old report:", err);
+            } else {
+              console.log(`Deleted old report: ${file}`);
+            }
+          });
+        }
+      });
+    });
+  });
+}
+
+// Call this periodically or after generating reports
+cleanupOldReports(path.join(__dirname, "reports"));
+cleanupOldReports(path.join(__dirname, "reports", "debug"));
 
 // https
 //   .createServer(
@@ -714,3 +1093,394 @@ const getHtml = (typeid) => {
 app.listen(port, function () {
   console.log(`server is running on ${port}`);
 });
+
+// Add this near the top of your server.js where you require Handlebars
+Handlebars.registerHelper(
+  "showLevel2Section",
+  function (levelBSchoolAvg, levelBNationalAvg) {
+    // Convert string percentages to numbers if needed
+    const schoolAvg = parseFloat(levelBSchoolAvg);
+    const nationalAvg = parseFloat(levelBNationalAvg);
+
+    // Return false (hide) if school average is 0 OR if national average is less than school average
+    return !(schoolAvg === 0 || schoolAvg < nationalAvg);
+  }
+);
+
+// Add this function to check if fonts are loaded
+const areFontsLoaded = async (page) => {
+  return await page.evaluate(() => {
+    return Promise.all([
+      document.fonts.check('12px "Ogg Text-Medium"'),
+      document.fonts.check('12px "Ogg Text-Book"'),
+      document.fonts.check('12px "Ogg Text-Light"'),
+      document.fonts.check('12px "Ogg Text-Bold"'),
+    ]).then((results) => results.every((result) => result));
+  });
+};
+
+// Add this helper before compiling the template
+Handlebars.registerHelper("paginate", function (array, pageSize) {
+  let pages = [];
+  for (let i = 0; i < array.length; i += pageSize) {
+    pages.push(array.slice(i, i + pageSize));
+  }
+  return pages;
+});
+
+// Add this near your other Handlebars helpers
+Handlebars.registerHelper("getLevelData", function (level, batch) {
+  return level[batch] || [];
+});
+
+Handlebars.registerHelper("getLevelTitle", function (levelNumber) {
+  return `Level- ${levelNumber} detailed Analysis`;
+});
+
+// Add this helper in your server.js where you define other Handlebars helpers
+Handlebars.registerHelper("getParentContext", function (property) {
+  return this[property] || this.root[property];
+});
+
+// Add this near your other Handlebars helpers
+Handlebars.registerHelper("lookup", function (obj, field) {
+  return obj[field];
+});
+
+Handlebars.registerHelper("getStateFromSchool", function (schoolName) {
+  const states = [
+    "Andhra Pradesh",
+    "Arunachal Pradesh",
+    "Assam",
+    "Bihar",
+    "Chhattisgarh",
+    "Goa",
+    "Gujarat",
+    "Haryana",
+    "Himachal Pradesh",
+    "Jharkhand",
+    "Karnataka",
+    "Kerala",
+    "Madhya Pradesh",
+    "Maharashtra",
+    "Manipur",
+    "Meghalaya",
+    "Mizoram",
+    "Nagaland",
+    "Odisha",
+    "Punjab",
+    "Rajasthan",
+    "Sikkim",
+    "Tamil Nadu",
+    "Telangana",
+    "Tripura",
+    "Uttar Pradesh",
+    "Uttarakhand",
+    "West Bengal",
+  ];
+
+  // Find matching state in school name
+  const foundState = states.find((state) => schoolName.includes(state));
+  return foundState || "";
+});
+
+Handlebars.registerHelper("or", function () {
+  // Convert arguments to array and remove the last item (Handlebars options object)
+  const args = Array.prototype.slice.call(arguments, 0, -1);
+  // Return true if any argument is truthy
+  return args.some((value) => !!value);
+});
+
+Handlebars.registerHelper("and", function () {
+  return Array.prototype.every.call(arguments, Boolean);
+});
+
+Handlebars.registerHelper("gte", function (a, b) {
+  return b >= a;
+});
+
+Handlebars.registerHelper("ne", function (a, b) {
+  return a !== b;
+});
+
+Handlebars.registerHelper("eq", function (a, b) {
+  return a === b;
+});
+
+Handlebars.registerHelper("not", function (value) {
+  return !value;
+});
+
+const generateSchoolReports = async (schoolsData) => {
+  // Setup directories first
+  setupRequiredDirectories();
+
+  const reports = [];
+
+  for (const schoolData of schoolsData.response) {
+    try {
+      console.log(`Processing report for: ${schoolData.schoolName}`);
+
+      const transformedData = {
+        schoolName: schoolData.schoolName,
+        zone: schoolData.zone,
+        levelASchoolAverage: schoolData.levelASchoolAverage,
+        levelANationalAverage: schoolData.levelANationalAverage,
+        levelAZoneAverage: schoolData.levelAZoneAverage,
+        levelBSchoolAverage: schoolData.levelBSchoolAverage,
+        levelBZoneAverage: schoolData.levelBZoneAverage,
+        levelBNationalAverage: schoolData.levelBNationalAverage,
+        studentsResultDeclared: schoolData.studentsResultDeclared,
+        studentsregistered: schoolData.studentsregistered,
+        participationPercentage: schoolData.participationPercentage,
+        outperformed: schoolData.outperformed,
+
+        // Level 1 data
+        level1: {
+          "Batch Grade 6 - 8": schoolData.level1["Batch Grade 6 - 8"].map(
+            (student) => ({
+              "Student Roll No": student["Student Roll No"],
+              Name: student.Name ? student.Name.toUpperCase() : "-",
+              Class: student.Class,
+              "Total Score": student.Total + "%",
+              "Zonal Rank": student["Zonal Rank"],
+              "AIR*": student["All India Rank"],
+            })
+          ),
+          "Batch Grade 9 - 10": schoolData.level1["Batch Grade 9 - 10"].map(
+            (student) => ({
+              "Student Roll No": student["Student Roll No"],
+              Name: student.Name ? student.Name.toUpperCase() : "-",
+              Class: student.Class,
+              "Total Score": student.Total + "%",
+              "Zonal Rank": student["Zonal Rank"],
+              "AIR*": student["All India Rank"],
+            })
+          ),
+          "Batch Grade 11 - 12": schoolData.level1["Batch Grade 11 - 12"].map(
+            (student) => ({
+              "Student Roll No": student["Student Roll No"],
+              Name: student.Name ? student.Name.toUpperCase() : "-",
+              Class: student.Class,
+              "Total Score": student.Total + "%",
+              "Zonal Rank": student["Zonal Rank"],
+              "AIR*": student["All India Rank"],
+            })
+          ),
+        },
+
+        // Level 2 data
+        level2: {
+          "Batch Grade 6 - 8": (
+            schoolData.level2["Batch Grade 6 - 8"] || []
+          ).map((student) => ({
+            "Student Roll No": student["Student Roll No"] || "-",
+            Name: student.Name || "-",
+            Class: student.Class || "-",
+            "Total Score": student.Total + "%",
+            "Zonal Rank": student["Zonal Rank"],
+            "AIR*": student["All India Rank"],
+          })),
+          "Batch Grade 9 - 10": (
+            schoolData.level2["Batch Grade 9 - 10"] || []
+          ).map((student) => ({
+            "Student Roll No": student["Student Roll No"] || "-",
+            Name: student.Name || "-",
+            Class: student.Class || "-",
+            "Total Score": student.Total + "%",
+            "Zonal Rank": student["Zonal Rank"],
+            "AIR*": student["All India Rank"],
+          })),
+          "Batch Grade 11 - 12": (
+            schoolData.level2["Batch Grade 11 - 12"] || []
+          ).map((student) => ({
+            "Student Roll No": student["Student Roll No"] || "-",
+            Name: student.Name || "-",
+            Class: student.Class || "-",
+            "Total Score": student.Total + "%",
+            "Zonal Rank": student["Zonal Rank"],
+            "AIR*": student["All India Rank"],
+          })),
+        },
+
+        topPerformers: schoolData.topPerformers,
+
+        // Update image paths to match your actual files
+        logoPath: getBase64Image(path.join(__dirname, "public/vector.svg")),
+        vectorIcon:
+          getBase64Image(path.join(__dirname, "public/Vector.png")) || "",
+        statsIcon:
+          getBase64Image(
+            path.join(__dirname, "public/material-symbols_trophy.png")
+          ) || "",
+        backgroundImage:
+          getBase64Image(
+            path.join(__dirname, "public/cert-assets/background.png")
+          ) || "",
+
+        // Update font paths to match your actual files
+        oggTextBook:
+          getBase64Font(
+            path.join(__dirname, "public/fonts/OggText-Book.ttf")
+          ) || "",
+        oggTextLight:
+          getBase64Font(
+            path.join(__dirname, "public/fonts/OggText-Light.ttf")
+          ) || "",
+        oggTextBold:
+          getBase64Font(
+            path.join(__dirname, "public/fonts/OggText-Bold.ttf")
+          ) || "",
+        oggTextMedium:
+          getBase64Font(
+            path.join(__dirname, "public/fonts/OggText-Medium.ttf")
+          ) || "",
+      };
+
+      // Log asset availability
+      console.log("Asset check:");
+      console.log(
+        "Logo:",
+        fs.existsSync(path.join(__dirname, "public/Vector.png"))
+      );
+      console.log(
+        "Vector:",
+        fs.existsSync(path.join(__dirname, "public/cert-assets/vector.png"))
+      );
+      console.log(
+        "Trophy:",
+        fs.existsSync(
+          path.join(__dirname, "public/material-symbols_trophy.png")
+        )
+      );
+      console.log(
+        "Background:",
+        fs.existsSync(path.join(__dirname, "public/cert-assets/background.png"))
+      );
+
+      // Generate HTML
+      const template = fs.readFileSync(
+        path.join(__dirname, "html/SchoolReportNew.html"),
+        "utf8"
+      );
+      const compiledTemplate = Handlebars.compile(template);
+      const html = compiledTemplate(transformedData);
+
+      // Save HTML for debugging
+      fs.writeFileSync(
+        path.join(
+          __dirname,
+          "reports/debug",
+          `${schoolData.schoolName.replace(/[^a-zA-Z0-9]/g, "_")}.html`
+        ),
+        html
+      );
+
+      // Generate PDF
+      const pdf = await generatePDF(html);
+
+      if (!pdf || !Buffer.isBuffer(pdf)) {
+        throw new Error("PDF generation produced invalid output");
+      }
+
+      // Create sanitized filename
+      const sanitizedSchoolName = schoolData.schoolName
+        .replace(/[^a-zA-Z0-9]/g, "_")
+        .replace(/_+/g, "_")
+        .toLowerCase();
+
+      const fileName = `${sanitizedSchoolName}_report.pdf`;
+      const filePath = path.join(__dirname, "generated-reports", fileName);
+
+      // Save PDF
+      fs.writeFileSync(filePath, pdf);
+
+      console.log(
+        `Successfully generated report for: ${schoolData.schoolName}`
+      );
+
+      reports.push({
+        schoolName: schoolData.schoolName,
+        fileName: fileName,
+        status: "success",
+      });
+    } catch (error) {
+      console.error(
+        `Error generating report for ${schoolData.schoolName}:`,
+        error
+      );
+      reports.push({
+        schoolName: schoolData.schoolName,
+        status: "error",
+        error: error.message,
+      });
+    }
+  }
+
+  return reports;
+};
+
+// Add this endpoint to handle batch processing
+app.post("/api/generate-school-reports-batch", async (req, res) => {
+  try {
+    const schoolsData = req.body;
+
+    // Create directory for reports if it doesn't exist
+    const reportsDir = path.join(__dirname, "generated-reports");
+    if (!fs.existsSync(reportsDir)) {
+      fs.mkdirSync(reportsDir);
+    }
+
+    // Generate reports
+    const results = await generateSchoolReports(schoolsData);
+
+    // Send response
+    res.json({
+      status: "success",
+      message: "Reports generated successfully",
+      reports: results,
+    });
+  } catch (error) {
+    console.error("Error in batch processing:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Error generating reports",
+      error: error.message,
+    });
+  }
+});
+
+Handlebars.registerHelper("default", function (value, defaultValue) {
+  // Check for null, undefined, empty string, or only whitespace
+  return value != null && value !== "" && String(value).trim() !== ""
+    ? value
+    : defaultValue;
+});
+
+// Add this helper where you define other Handlebars helpers
+Handlebars.registerHelper("getSchoolNameClass", function (schoolName) {
+  // Check if schoolName is undefined or null
+  if (!schoolName) return "school-name";
+
+  // Count the number of characters and words
+  const charCount = schoolName.length;
+  const wordCount = schoolName.split(/[\s,]+/).length;
+
+  // Return appropriate class based on length
+  if (charCount > 80) return "school-name very-long";
+  if (charCount > 50 || wordCount > 5) return "school-name long";
+  return "school-name";
+});
+
+// Add this near your other Handlebars helpers
+Handlebars.registerHelper(
+  "showLevel1Section",
+  function (levelASchoolAvg, levelANationalAvg) {
+    // Convert string percentages to numbers if needed
+    const schoolAvg = parseFloat(levelASchoolAvg);
+    const nationalAvg = parseFloat(levelANationalAvg);
+
+    // Return false (hide) if school average is greater than national average
+    return !(schoolAvg < nationalAvg);
+  }
+);

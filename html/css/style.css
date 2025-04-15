@@ -1,0 +1,238 @@
+:root {
+  --blue: #28398B;
+  --orange: #F96C1D;
+  --black: #000000;
+  --light-blue: #F1FAFD;
+  --dark-blue: #235288;
+  --border-blue: #2860b2;
+  --text-blue: #1a3d73;
+  --red: #c11d00;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  display: flex;
+  justify-content: center;
+  background-color: white;
+  font-family: "Ogg Text-Book", Helvetica;
+}
+
+.report-container {
+  width: 595px;
+  height: 842px;
+  border: 5.5px solid var(--border-blue);
+  background-color: #fffbff;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Header Section */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 50px 38px 0;
+}
+
+.school-info {
+  max-width: 240px;
+}
+
+.school-title {
+  font-family: "Ogg Text-Light", Helvetica;
+  color: var(--dark-blue);
+  font-size: 20.4px;
+  margin-bottom: 16px;
+}
+
+.school-name {
+  color: var(--dark-blue);
+  font-size: 24.8px;
+  line-height: 29.1px;
+}
+
+.zone-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.zone-logo {
+  width: 148px;
+  height: 65px;
+}
+
+.zone-divider {
+  width: 78px;
+  height: 1px;
+  background-color: var(--dark-blue);
+}
+
+.zone-text {
+  color: var(--dark-blue);
+  font-size: 14.6px;
+  text-align: center;
+}
+
+/* Scores Section */
+.scores-section {
+  margin-top: 40px;
+  padding: 0 30px;
+}
+
+.level-score {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 40px;
+}
+
+.score-info {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.score-header {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.level-title {
+  font-family: "Ogg Text-Light", Helvetica;
+  color: var(--red);
+  font-size: 20px;
+}
+
+.score-divider {
+  width: 1px;
+  height: 18.5px;
+  background-color: var(--dark-blue);
+}
+
+.score-subtitle {
+  font-family: "Ogg Text-Bold", Helvetica;
+  color: var(--text-blue);
+  font-size: 8.7px;
+  line-height: 9.6px;
+}
+
+.score-value {
+  color: var(--border-blue);
+  font-size: 50px;
+  opacity: 0.9;
+}
+
+.averages {
+  display: flex;
+  gap: 66px;
+  margin-left: 57px;
+}
+
+.average-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.average-label {
+  font-family: "Ogg Text-Medium", Helvetica;
+  color: var(--text-blue);
+  font-size: 9.6px;
+}
+
+.average-value {
+  color: #002863;
+  font-size: 47.3px;
+  opacity: 0.9;
+}
+
+/* Stats Boxes */
+.stats-box {
+  margin: 0 24px;
+  padding: 4px 12px;
+  background-color: #197490;
+  border-radius: 8.38px;
+  border: 1.2px solid #004d69;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.stats-content {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.stats-icon {
+  width: 30px;
+  height: 30px;
+}
+
+.stats-text {
+  color: white;
+  font-family: "Ogg Text-Medium", Helvetica;
+  font-size: 11px;
+  line-height: 15.8px;
+  max-width: 203px;
+}
+
+.stats-percentage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.percentage-label {
+  color: white;
+  opacity: 0.6;
+  font-size: 9.7px;
+}
+
+.percentage-value {
+  color: white;
+  font-size: 19.9px;
+}
+
+/* Top Performers Section */
+.performers-section {
+  margin: 40px 42px;
+}
+
+.performers-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 46px;
+}
+
+.performer-column {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.performer-header {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.performer-grades {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.grade-item {
+  font-family: "Ogg Text-Medium", Helvetica;
+  color: var(--border-blue);
+  font-size: 11.6px;
+  line-height: 11px;
+}

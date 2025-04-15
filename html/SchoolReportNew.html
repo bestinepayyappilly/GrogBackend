@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      @font-face {
+        font-family: "Ogg Text-Book";
+        src: url("{{oggTextBook}}") format("truetype");
+        font-weight: normal;
+        font-style: normal;
+        font-display: swap;
+      }
+
+      @font-face {
+        font-family: "Ogg Text-Light";
+        src: url("{{oggTextLight}}") format("truetype");
+        font-weight: 300;
+        font-style: normal;
+        font-display: swap;
+      }
+
+      @font-face {
+        font-family: "Ogg Text-Bold";
+        src: url("{{oggTextBold}}") format("truetype");
+        font-weight: bold;
+        font-style: normal;
+        font-display: swap;
+      }
+
+      @font-face {
+        font-family: "Ogg Text-Medium";
+        src: url("{{oggTextMedium}}") format("truetype");
+        font-weight: 500;
+        font-style: normal;
+        font-display: swap;
+      }
+
+      :root {
+        --blue: #28398B;
+        --orange: #F96C1D;
+        --black: #000000;
+        --light-blue: #F1FAFD;
+        --dark-blue: #235288;
+        --border-blue: #2860b2;
+        --text-blue: #1a3d73;
+        --red: #c11d00;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        display: flex;
+        justify-content: center;
+        flex-direction: column;
+        background-color: white;
+        font-family: "Ogg Text-Book", Helvetica;
+      }
+
+      .report-container {
+        width: 595px;
+        height: 840px;
+        border: 5.5px solid var(--border-blue);
+        background-color: #fffbff;
+        position: relative;
+        overflow: hidden;
+        background-image: url("{{backgroundImage}}");
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+      }
+
+      /* Header Section */
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        padding: 40px 38px 0;
+      }
+
+      .school-info {
+        max-width: 260px;
+      }
+
+      .school-title {
+        font-family: "Ogg Text-Book", Helvetica;
+        color: var(--dark-blue);
+        font-size: 20.4px;
+        margin-bottom: 16px;
+      }
+
+      .school-name {
+        color: var(--dark-blue);
+        font-size: 24.8px;
+        line-height: 29.1px;
+        max-width: 260px;
+        word-wrap: break-word;
+        hyphens: auto;
+        margin: 0;
+        padding: 0;
+      }
+
+      .school-name.long {
+        font-size: 20px;
+        line-height: 24px;
+      }
+
+      .school-name.very-long {
+        font-size: 16px;
+        line-height: 20px;
+      }
+
+      .zone-info {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .zone-logo {
+        width: 148px;
+        height: 65px;
+      }
+
+      .zone-divider {
+        width: 78px;
+        height: 1px;
+        background-color: var(--dark-blue);
+        opacity: 0.5;
+      }
+
+      .zone-text {
+        color: var(--dark-blue);
+        font-size: 14.6px;
+        text-align: center;
+      }
+
+      /* Scores Section */
+      .scores-section {
+        margin-top: 30px;
+        padding: 0 30px;
+      }
+
+      .level-score {
+        display: flex;
+        align-items: flex-start;
+        margin-bottom: 20px;
+      }
+
+      .score-info {
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+      }
+
+      .score-header {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+      }
+
+      .level-title {
+        font-family: "Ogg Text-Book", Helvetica;
+        color: var(--red);
+        font-size: 20px;
+      }
+
+      .score-divider {
+        width: 1px;
+        height: 18.5px;
+        background-color: var(--dark-blue);
+      }
+
+      .score-subtitle {
+        font-family: "Ogg Text-Bold", Helvetica;
+        color: var(--text-blue);
+        font-size: 8.7px;
+        line-height: 9.6px;
+      }
+
+      .score-value {
+        color: var(--border-blue);
+        font-size: 43px;
+        opacity: 0.9;
+      }
+
+      .averages {
+        display: flex;
+        gap: 30px;
+        margin-left: 57px;
+      }
+
+      .average-item {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        align-items: center;  
+        justify-content: center;
+      }
+
+      .average-label {
+        font-family: "Ogg Text-Book", Helvetica;
+        color: var(--text-blue);
+        font-size: 9.6px;
+        font-weight: 300;
+      }
+
+      .average-value {
+        color: #002863;
+        font-size: 43px;
+        opacity: 0.9;
+        margin-top: 20px;
+      }
+
+      /* Stats Boxes */
+      .stats-box {
+        margin: 0 24px;
+        padding: 4px 12px;
+        background-color: #197490;
+        border-radius: 8.38px;
+        border: 1.2px solid #004d69;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .stats-content {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+      }
+
+      .stats-icon {
+        width: 30px;
+        height: 30px;
+      }
+
+      .stats-text-1{
+        color: white;
+        font-family: "Ogg Text-Book", Helvetica;
+        font-size: 11px;
+        line-height: 15.8px;
+        max-width: 203px;
+      }
+
+      .stats-text-2{
+        color: white;
+        font-family: "Ogg Text-Book", Helvetica;
+        font-size: 11px;
+        line-height: 15.8px;
+        max-width: 350px;
+      }
+
+      .stats-percentage {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .percentage-label {
+        color: white;
+        opacity: 0.6;
+        font-size: 9.7px;
+      }
+
+      .percentage-value {
+        color: white;
+        font-size: 19.9px;
+      }
+
+      /* Top Performers Section */
+      .performers-section {
+        display: flex;
+        flex-direction: column;
+        margin: 20px 42px;
+        gap: 40px;
+      }
+
+      .performers-grid {
+        display: grid;
+        grid-template-columns: repeat(1, 1fr);
+        gap: 46px;
+      }
+
+      .performer-column {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      .performer-header {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+      }
+
+      .performer-grades {
+        display: flex;
+        flex-direction: row;
+        gap: 30px;
+        margin-top: 10px;
+      }
+
+      .grade-item {
+        font-family: "Ogg Text-Book", Helvetica !important;
+        color: var(--border-blue);
+        font-size: 11.6px;
+        line-height: 1.4;
+        font-weight: 300;
+      }
+
+      .grade-item br {
+        content: "";
+        display: block;
+        margin: 5px 0;
+      }
+
+      .grade-item strong {
+        font-family: "Ogg Text-Book", Helvetica !important;
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 300;
+      }
+
+      /* Analysis Page Specific Styles */
+      .detailed-analysis {
+        background: linear-gradient(to bottom, #ffffff 0%, #f0f8ff 100%);
+        position: relative;
+        page-break-after: always;
+        background-image: url("{{backgroundImage}}");
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+      }
+
+      .analysis-section {
+        padding: 10px 20px;
+        margin-top: 10px;
+      }
+
+      .analysis-title {
+        color: var(--dark-blue);
+        font-family: "Ogg Text-Book", Helvetica;
+        font-size: 10px;
+        margin-bottom: 10px;
+        margin-left: 25px;
+        font-weight: normal;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .analysis-table {
+        margin: 15px 0;
+        width: 95%;
+        margin-left: auto;
+        margin-right: auto;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      .analysis-table table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      .analysis-table th {
+        padding: 11px 8px;
+        font-size: 10px;
+        text-align: center;
+        background-color: #F5F5F5;
+        color: #0F1419;
+        font-family: "Ogg Text-Book", Helvetica;
+        border-bottom: 0.8px solid rgba(0,0,0,0.2);
+      }
+
+      .analysis-table td {
+        padding: 11px 8px;
+        font-size: 10px;
+        text-align: center;
+        border-bottom: 0.8px solid rgba(0,0,0,0.2);
+      }
+
+      .analysis-table tr {
+        height: 30px;
+        background-color: #FFFFFF;
+        border-bottom: 0.8px solid rgba(0,0,0,0.2);
+      }
+
+      /* Add these new rules to remove bottom border from last row */
+      .analysis-table tr:last-child td {
+        border-bottom: none;
+      }
+
+      .analysis-table tr:last-child {
+        border-bottom: none;
+      }
+
+      .footnote {
+        color: #666;
+        font-size: 12px;
+        text-align: right;
+        margin-top: 2px;
+        font-family: "Ogg Text-Book", Arial, sans-serif;
+        font-weight: normal;
+      }
+
+      .highlight-text {
+        font-family: "Ogg Text-Bold", Helvetica;
+        font-size: 14px;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="report-container">
+      <!-- Header -->
+      <header class="header">
+        <div class="school-info">
+          <h1 class="school-title">School Level Report</h1>
+          <h2 class="{{getSchoolNameClass schoolName}}">{{schoolName}}</h2>
+        </div>
+        <div class="zone-info">
+          <img class="zone-logo" src="{{logoPath}}" alt="Logo" />
+          <div class="zone-divider"></div>
+          <div class="zone-text">
+            {{#if (getStateFromSchool schoolName)}}
+                {{getStateFromSchool schoolName}}
+            {{/if}}
+            - {{zone}} Zone
+            
+          </div>
+        </div>
+      </header>
+
+      <!-- Scores Section -->
+      <section class="scores-section">
+        <!-- Level 1 Score -->
+        {{#if (showLevel1Section levelASchoolAverage levelANationalAverage)}}
+        <div class="level-score">
+          <div class="score-info">
+            <div class="score-header">
+              <div class="level-title">Level 1</div>
+              <div class="score-divider"></div>
+              <div class="score-subtitle">Your school's<br/>Average score</div>
+            </div>
+            <div class="score-value">{{levelASchoolAverage}}%</div>
+          </div>
+          <div class="averages">
+            <div class="average-item">
+              <div class="average-label">{{zone}} zone average</div>
+              <div class="average-value">{{levelAZoneAverage}}%</div>
+            </div>
+            <div class="average-item">
+              <div class="average-label">National average</div>
+              <div class="average-value">{{levelANationalAverage}}%</div>
+            </div>
+          </div>
+        </div>
+        {{/if}}
+
+        <!-- Level 2 Score -->
+        {{#if (showLevel2Section levelBSchoolAverage levelBNationalAverage)}}
+        <div class="level-score">
+          <div class="score-info">
+            <div class="score-header">
+              <div class="level-title">Level 2</div>
+              <div class="score-divider"></div>
+              <div class="score-subtitle">Your school's<br/>Average score</div>
+            </div>
+            <div class="score-value">{{levelBSchoolAverage}}%</div>
+          </div>
+          <div class="averages">
+            <div class="average-item">
+              <div class="average-label">{{zone}} zone average</div>
+              <div class="average-value">{{levelBZoneAverage}}%</div>
+            </div>
+            <div class="average-item">
+              <div class="average-label">National average</div>
+              <div class="average-value">{{levelBNationalAverage}}%</div>
+            </div>
+          </div>
+        </div>
+        {{/if}}
+      </section>
+
+      <!-- Stats Box -->
+      <div class="stats-box">
+        <div class="stats-content">
+          <img class="stats-icon" src="{{vectorIcon}}" alt="Trophy" />
+          <p class="stats-text-1">Out of {{studentsregistered}} registered students from your school, {{studentsResultDeclared}} actively participated</p>
+          
+        </div>
+        <div class="stats-percentage">
+          <div class="percentage-label">participation rate</div>
+          <div class="percentage-value">{{participationPercentage}}%</div>
+        </div>
+      </div>
+
+      <!-- Top Performers Section -->
+      <section class="performers-section">
+
+          <!-- Level 1 Performers -->
+          {{#if (or 
+              topPerformers.level1.[Grade 6-8] 
+              topPerformers.level1.[Grade 9-10] 
+              topPerformers.level1.[Grade 11-12]
+          )}}
+          <div class="performer-column">
+            <div class="performer-header">
+              <div class="level-title">Level 1</div>
+              <div class="score-divider"></div>
+              <div class="score-subtitle">The top performers from<br/>your school in Level-1:</div>
+            </div>
+            <div class="performer-grades">
+              <div class="grade-item">
+                <strong>Grade 6-8:</strong>
+                {{#if topPerformers.level1.[Grade 6-8]}}
+                    {{topPerformers.level1.[Grade 6-8]}}
+                {{else}}
+                    No Participants
+                {{/if}}
+              </div>
+              <div class="grade-item">
+                <strong>Grade 9-10:</strong>
+                {{#if topPerformers.level1.[Grade 9-10]}}
+                    {{topPerformers.level1.[Grade 9-10]}}
+                {{else}}
+                    No Participants
+                {{/if}}
+              </div>
+              <div class="grade-item">
+                <strong>Grade 11-12:</strong>
+                {{#if topPerformers.level1.[Grade 11-12]}}
+                    {{topPerformers.level1.[Grade 11-12]}}
+                {{else}}
+                    No Participants
+                {{/if}}
+              </div>
+            </div>
+          </div>
+          {{/if}}
+        
+          <!-- Level 2 Performers -->
+          {{#if (or 
+              topPerformers.level2.[Grade 6-8] 
+              topPerformers.level2.[Grade 9-10] 
+              topPerformers.level2.[Grade 11-12]
+          )}}
+          <div class="performer-column">
+            <div class="performer-header">
+              <div class="level-title">Level 2</div>
+              <div class="score-divider"></div>
+              <div class="score-subtitle">The top performers from<br/>your school in Level-2:</div>
+            </div>
+            <div class="performer-grades">
+              <div class="grade-item">
+                <strong>Grade 6-8:</strong>
+                {{#if topPerformers.level2.[Grade 6-8]}}
+                    {{topPerformers.level2.[Grade 6-8]}}
+                {{else}}
+                    No Participants
+                {{/if}}
+              </div>
+              <div class="grade-item">
+                <strong>Grade 9-10:</strong>
+                {{#if topPerformers.level2.[Grade 9-10]}}
+                    {{topPerformers.level2.[Grade 9-10]}}
+                {{else}}
+                    No Participants
+                {{/if}}
+              </div>
+              <div class="grade-item">
+                <strong>Grade 11-12:</strong>
+                {{#if topPerformers.level2.[Grade 11-12]}}
+                    {{topPerformers.level2.[Grade 11-12]}}
+                {{else}}
+                    No Participants
+                {{/if}}
+              </div>
+            </div>
+          </div>
+          {{/if}}
+  
+      </section>
+
+      <!-- Performance Stats Box -->
+      {{#if (and outperformed (gte levelBNationalAverage levelBSchoolAverage))}}
+      <div class="stats-box">
+        <div class="stats-content">
+          <img class="stats-icon" src="{{statsIcon}}" alt="Trophy" />
+          <p class="stats-text-2">Your school outperformed <span class="highlight-text">{{outperformed}}%</span> of schools in your {{zone}} zone.</p>
+        </div>
+      </div>
+      {{/if}}
+      
+    </div>
+    
+    <!-- First, render Level 1 pages -->
+    {{#each (paginate level1.[Batch Grade 6 - 8] 15)}}
+    <div class="report-container detailed-analysis">
+      <header class="header">
+        <div class="school-info">
+          <h1 class="school-title">School Level Report</h1>
+          <h2 class="{{getSchoolNameClass schoolName}}">{{schoolName}}</h2>
+        </div>
+        <div class="zone-info">
+          <img class="zone-logo" src="{{lookup ../this 'logoPath'}}" alt="Logo" />
+          <div class="zone-divider"></div>
+          <div class="zone-text">
+            {{#if (getStateFromSchool (lookup ../this 'schoolName'))}}
+              {{getStateFromSchool (lookup ../this 'schoolName')}} - 
+            {{/if}}
+            {{lookup ../this 'zone'}} Zone
+          </div>
+        </div>
+      </header>
+
+      <section class="analysis-section">
+        <h3 class="analysis-title">Level- 1 detailed Analysis (Grade 6-8)</h3>
+        <div class="analysis-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Roll Number</th>
+                <th>Name</th>
+                <th>Class</th>
+                <th>Total Score</th>
+                <th>Batch Rank</th>
+                
+              </tr>
+            </thead>
+            <tbody>
+              {{#each this}}
+              <tr>
+                <td>{{default this.[Student Roll No] "-"}}</td>
+                <td>{{default this.Name "-"}}</td>
+                <td>{{default this.Class "-"}}</td>
+                <td>{{#if (and this.[Total Score] (not (or (eq this.[Total Score] 0) (eq this.[Total Score] "0"))))}}{{this.[Total Score]}}{{else}}-{{/if}}</td>
+                <td>{{#if (and this.[Batch Rank] (not (or (eq this.[Batch Rank] 0) (eq this.[Batch Rank] "0"))))}}{{this.[Batch Rank]}}{{else}}-{{/if}}</td>
+
+              </tr>
+              {{/each}}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+    {{/each}}
+
+    {{#each (paginate level1.[Batch Grade 9 - 10] 15)}}
+    <div class="report-container detailed-analysis">
+      <header class="header">
+        <div class="school-info">
+          <h1 class="school-title">School Level Report</h1>
+          <h2 class="{{getSchoolNameClass schoolName}}">{{schoolName}}</h2>
+        </div>
+        <div class="zone-info">
+          <img class="zone-logo" src="{{lookup ../this 'logoPath'}}" alt="Logo" />
+          <div class="zone-divider"></div>
+          <div class="zone-text">
+            {{#if (getStateFromSchool (lookup ../this 'schoolName'))}}
+              {{getStateFromSchool (lookup ../this 'schoolName')}} - 
+            {{/if}}
+            {{lookup ../this 'zone'}} Zone
+          </div>
+        </div>
+      </header>
+      <section class="analysis-section">
+        <h3 class="analysis-title">Level- 1 detailed Analysis (Grade 9-10)</h3>
+        <div class="analysis-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Roll Number</th>
+                <th>Name</th>
+                <th>Class</th>
+                <th>Total Score</th>
+                <th>Batch Rank</th>
+                
+              </tr>
+            </thead>
+            <tbody>
+              {{#each this}}
+              <tr>
+                <td>{{default this.[Student Roll No] "-"}}</td>
+                <td>{{default this.Name "-"}}</td>
+                <td>{{default this.Class "-"}}</td>
+                <td>{{#if (and this.[Total Score] (not (or (eq this.[Total Score] 0) (eq this.[Total Score] "0"))))}}{{this.[Total Score]}}{{else}}-{{/if}}</td>
+                <td>{{#if (and this.[Batch Rank] (not (or (eq this.[Batch Rank] 0) (eq this.[Batch Rank] "0"))))}}{{this.[Batch Rank]}}{{else}}-{{/if}}</td>
+                
+              </tr>
+              {{/each}}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+    {{/each}}
+
+    {{#each (paginate level1.[Batch Grade 11 - 12] 15)}}
+    <div class="report-container detailed-analysis">
+      <header class="header">
+        <div class="school-info">
+          <h1 class="school-title">School Level Report</h1>
+          <h2 class="{{getSchoolNameClass schoolName}}">{{schoolName}}</h2>
+        </div>
+        <div class="zone-info">
+          <img class="zone-logo" src="{{lookup ../this 'logoPath'}}" alt="Logo" />
+          <div class="zone-divider"></div>
+          <div class="zone-text">
+            {{#if (getStateFromSchool (lookup ../this 'schoolName'))}}
+              {{getStateFromSchool (lookup ../this 'schoolName')}} - 
+            {{/if}}
+            {{lookup ../this 'zone'}} Zone
+          </div>
+        </div>
+      </header>
+      <section class="analysis-section">
+        <h3 class="analysis-title">Level- 1 detailed Analysis (Grade 11-12)</h3>
+        <div class="analysis-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Roll Number</th>
+                <th>Name</th>
+                <th>Class</th>
+                <th>Total Score</th>
+                <th>Batch Rank</th>
+
+              </tr>
+            </thead>
+            <tbody>
+              {{#each this}}
+              <tr>
+                <td>{{default this.[Student Roll No] "-"}}</td>
+                <td>{{default this.Name "-"}}</td>
+                <td>{{default this.Class "-"}}</td>
+                <td>{{#if (and this.[Total Score] (not (or (eq this.[Total Score] 0) (eq this.[Total Score] "0"))))}}{{this.[Total Score]}}{{else}}-{{/if}}</td>
+                <td>{{#if (and this.[Batch Rank] (not (or (eq this.[Batch Rank] 0) (eq this.[Batch Rank] "0"))))}}{{this.[Batch Rank]}}{{else}}-{{/if}}</td>
+                
+              </tr>
+              {{/each}}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+    {{/each}}
+
+    <!-- Then render Level 2 pages -->
+    {{#each (paginate level2.[Batch Grade 6 - 8] 15)}}
+    <div class="report-container detailed-analysis">
+      <header class="header">
+        <div class="school-info">
+          <h1 class="school-title">School Level Report</h1>
+          <h2 class="{{getSchoolNameClass schoolName}}">{{schoolName}}</h2>
+        </div>
+        <div class="zone-info">
+          <img class="zone-logo" src="{{lookup ../this 'logoPath'}}" alt="Logo" />
+          <div class="zone-divider"></div>
+          <div class="zone-text">
+            {{#if (getStateFromSchool (lookup ../this 'schoolName'))}}
+              {{getStateFromSchool (lookup ../this 'schoolName')}} - 
+            {{/if}}
+            {{lookup ../this 'zone'}} Zone
+          </div>
+        </div>
+      </header>
+      <section class="analysis-section">
+        <h3 class="analysis-title">Level- 2 detailed Analysis (Grade 6-8)</h3>
+        <div class="analysis-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Roll Number</th>
+                <th>Name</th>
+                <th>Class</th>
+                <th>Total Score</th>
+                <th>Zonal Rank</th>
+                <th>AIR*</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{#each this}}
+              <tr>
+                <td>{{default this.[Student Roll No] "-"}}</td>
+                <td>{{default this.Name "-"}}</td>
+                <td>{{default this.Class "-"}}</td>
+                <td>{{#if (and this.[Total Score] (not (or (eq this.[Total Score] 0) (eq this.[Total Score] "0"))))}}{{this.[Total Score]}}{{else}}-{{/if}}</td>
+                <td>{{#if (and this.[Zonal Rank] (not (or (eq this.[Zonal Rank] 0) (eq this.[Zonal Rank] "0"))))}}{{this.[Zonal Rank]}}{{else}}-{{/if}}</td>
+                <td>{{#if (and this.[AIR*] (not (or (eq this.[AIR*] 0) (eq this.[AIR*] "0"))))}}{{this.[AIR*]}}{{else}}-{{/if}}</td>
+              </tr>
+              {{/each}}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="footnote">
+          AIR* - All India Rank
+        </div>
+      </section>
+    </div>
+    {{/each}}
+
+    {{#each (paginate level2.[Batch Grade 9 - 10] 15)}}
+    <div class="report-container detailed-analysis">
+      <header class="header">
+        <div class="school-info">
+          <h1 class="school-title">School Level Report</h1>
+          <h2 class="{{getSchoolNameClass schoolName}}">{{schoolName}}</h2>
+        </div>
+        <div class="zone-info">
+          <img class="zone-logo" src="{{lookup ../this 'logoPath'}}" alt="Logo" />
+          <div class="zone-divider"></div>
+          <div class="zone-text">
+            {{#if (getStateFromSchool (lookup ../this 'schoolName'))}}
+              {{getStateFromSchool (lookup ../this 'schoolName')}} - 
+            {{/if}}
+            {{lookup ../this 'zone'}} Zone
+          </div>
+        </div>
+      </header>
+      <section class="analysis-section">
+        <h3 class="analysis-title">Level- 2 detailed Analysis (Grade 9-10)</h3>
+        <div class="analysis-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Roll Number</th>
+                <th>Name</th>
+                <th>Class</th>
+                <th>Total Score</th>
+                <th>Zonal Rank</th>
+                <th>AIR*</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{#each this}}
+              <tr>
+                <td>{{default this.[Student Roll No] "-"}}</td>
+                <td>{{default this.Name "-"}}</td>
+                <td>{{default this.Class "-"}}</td>
+                <td>{{#if (and this.[Total Score] (not (or (eq this.[Total Score] 0) (eq this.[Total Score] "0"))))}}{{this.[Total Score]}}{{else}}-{{/if}}</td>
+                <td>{{#if (and this.[Zonal Rank] (not (or (eq this.[Zonal Rank] 0) (eq this.[Zonal Rank] "0"))))}}{{this.[Zonal Rank]}}{{else}}-{{/if}}</td>
+                <td>{{#if (and this.[AIR*] (not (or (eq this.[AIR*] 0) (eq this.[AIR*] "0"))))}}{{this.[AIR*]}}{{else}}-{{/if}}</td>
+              </tr>
+              {{/each}}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="footnote">
+          AIR* - All India Rank
+        </div>
+      </section>
+    </div>
+    {{/each}}
+
+    {{#each (paginate level2.[Batch Grade 11 - 12] 15)}}
+    <div class="report-container detailed-analysis">
+      <header class="header">
+        <div class="school-info">
+          <h1 class="school-title">School Level Report</h1>
+          <h2 class="{{getSchoolNameClass schoolName}}">{{schoolName}}</h2>
+        </div>
+        <div class="zone-info">
+          <img class="zone-logo" src="{{lookup ../this 'logoPath'}}" alt="Logo" />
+          <div class="zone-divider"></div>
+          <div class="zone-text">
+            {{#if (getStateFromSchool (lookup ../this 'schoolName'))}}
+              {{getStateFromSchool (lookup ../this 'schoolName')}} - 
+            {{/if}}
+            {{lookup ../this 'zone'}} Zone
+          </div>
+        </div>
+      </header>
+      <section class="analysis-section">
+        <h3 class="analysis-title">Level- 2 detailed Analysis (Grade 11-12)</h3>
+        <div class="analysis-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Roll Number</th>
+                <th>Name</th>
+                <th>Class</th>
+                <th>Total Score</th>
+                <th>Zonal Rank</th>
+                <th>AIR*</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{#each this}}
+              <tr>
+                <td>{{default this.[Student Roll No] "-"}}</td>
+                <td>{{default this.Name "-"}}</td>
+                <td>{{default this.Class "-"}}</td>
+                <td>{{#if (and this.[Total Score] (not (or (eq this.[Total Score] 0) (eq this.[Total Score] "0"))))}}{{this.[Total Score]}}{{else}}-{{/if}}</td>
+                <td>{{#if (and this.[Zonal Rank] (not (or (eq this.[Zonal Rank] 0) (eq this.[Zonal Rank] "0"))))}}{{this.[Zonal Rank]}}{{else}}-{{/if}}</td>
+                <td>{{#if (and this.[AIR*] (not (or (eq this.[AIR*] 0) (eq this.[AIR*] "0"))))}}{{this.[AIR*]}}{{else}}-{{/if}}</td>
+              </tr>
+              {{/each}}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="footnote">
+          AIR* - All India Rank
+        </div>
+      </section>
+    </div>
+    {{/each}}
+  </body>
+</html>

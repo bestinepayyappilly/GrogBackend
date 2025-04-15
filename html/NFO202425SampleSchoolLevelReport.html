@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>School Level Report</title>
+    <script src="https://cdn.jsdelivr.net/npm/handlebars@latest/dist/handlebars.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .logo {
+            max-width: 290px;
+            height: auto;
+        }
+        h1, h2 {
+            color: #000;
+            margin: 20px 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #000;
+            padding: 8px;
+            text-align: center;
+        }
+        th {
+            background-color: #f5f5f5;
+            font-weight: bold;
+        }
+        ul {
+            padding-left: 20px;
+        }
+        li {
+            margin-bottom: 10px;
+        }
+        .highlight {
+            font-weight: bold;
+            color: #404040;
+        }
+    </style>
+</head>
+<body>
+    <div id="report-content">
+        <!-- Content will be rendered here -->
+    </div>
+
+    <script id="report-template" type="text/x-handlebars-template">
+        <div class="header">
+            <img src="{{logoPath}}" alt="Logo" class="logo">
+            <h1>School Level Report</h1>
+            <h2>{{schoolName}}, {{schoolLocation}}</h2>
+        </div>
+
+        <ul>
+            <li>Your school's <span class="highlight">average score in Level-1 was {{level1Average}}%</span>, compared to the <span class="highlight">zone average of {{zoneLevel1Average}}%</span> and the <span class="highlight">national average of {{nationalLevel1Average}}%</span>.</li>
+            <li>Your school's <span class="highlight">average score in Level-2 was {{level2Average}}%</span>, compared to the <span class="highlight">zone average of {{zoneLevel2Average}}%</span> and the <span class="highlight">national average of {{nationalLevel2Average}}%</span>.</li>
+            <li>Out of <span class="highlight">{{totalRegistered}}</span> registered students from your school, <span class="highlight">{{totalParticipated}}</span> actively participated, achieving a <span class="highlight">{{participationRate}}%</span> participation rate</li>
+            <li><span class="highlight">{{highestParticipationGrade}}</span> had the highest participation from your school.</li>
+            <li>The highest scorer from your school in <span class="highlight">Level-1</span>:
+                <ul>
+                    {{#each level1TopScorers}}
+                    <li>{{grade}}: {{name}}</li>
+                    {{/each}}
+                </ul>
+            </li>
+            <li>The highest scorer from your school in <span class="highlight">Level-2</span>:
+                <ul>
+                    {{#each level2TopScorers}}
+                    <li>{{grade}}: {{name}}</li>
+                    {{/each}}
+                </ul>
+            </li>
+            <li>Your school outperformed <span class="highlight">{{outperformedPercentage}}%</span> of schools in your {{zone}} zone.</li>
+        </ul>
+
+        <div style="width: 600px; margin: 20px auto;">
+            <canvas id="averagesChart"></canvas>
+        </div>
+
+        <h2>Level-1 Awards & Certificate Information:</h2>
+        <ol>
+            {{#each level1Awards}}
+            <li><span class="highlight">{{title}}:</span> {{description}}</li>
+            {{/each}}
+        </ol>
+
+        <h2>Batch Grade 6-8</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Student Roll No</th>
+                    <th>Name</th>
+                    <th>Class</th>
+                    <th>Money</th>
+                    <th>Financial Planning</th>
+                    <th>Banking</th>
+                    <th>Investments</th>
+                    <th>Loans & Credit</th>
+                    <th>Total</th>
+                    <th>Batch Rank</th>
+                    <th>Zonal Rank</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{#each level1Grade6to8}}
+                <tr>
+                    <td>{{rollNo}}</td>
+                    <td>{{name}}</td>
+                    <td>{{class}}</td>
+                    <td>{{money}}%</td>
+                    <td>{{financialPlanning}}%</td>
+                    <td>{{banking}}%</td>
+                    <td>{{investments}}%</td>
+                    <td>{{loansCredit}}%</td>
+                    <td>{{total}}%</td>
+                    <td>{{batchRank}}</td>
+                    <td>{{zonalRank}}</td>
+                </tr>
+                {{/each}}
+            </tbody>
+        </table>
+        <h2>Batch Grade 9-10</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Student Roll No</th>
+                    <th>Name</th>
+                    <th>Class</th>
+                    <th>Money</th>
+                    <th>Financial Planning</th>
+                    <th>Banking</th>
+                    <th>Investments</th>
+                    <th>Loans & Credit</th>
+                    <th>Total</th>
+                    <th>Batch Rank</th>
+                    <th>Zonal Rank</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{#each level1Grade9to10}}
+                <tr>
+                    <td>{{rollNo}}</td>
+                    <td>{{name}}</td>
+                    <td>{{class}}</td>
+                    <td>{{money}}%</td>
+                    <td>{{financialPlanning}}%</td>
+                    <td>{{banking}}%</td>
+                    <td>{{investments}}%</td>
+                    <td>{{loansCredit}}%</td>
+                    <td>{{total}}%</td>
+                    <td>{{batchRank}}</td>
+                    <td>{{zonalRank}}</td>
+                </tr>
+                {{/each}}
+            </tbody>
+        </table>
+        <h2>Batch Grade 11-12</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Student Roll No</th>
+                    <th>Name</th>
+                    <th>Class</th>
+                    <th>Money</th>
+                    <th>Financial Planning</th>
+                    <th>Banking</th>
+                    <th>Investments</th>
+                    <th>Loans & Credit</th>
+                    <th>Tax Planning</th>
+                    <th>Total</th>
+                    <th>Batch Rank</th>
+                    <th>Zonal Rank</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{#each level1Grade11to12}}
+                <tr>
+                    <td>{{rollNo}}</td>
+                    <td>{{name}}</td>
+                    <td>{{class}}</td>
+                    <td>{{money}}%</td>
+                    <td>{{financialPlanning}}%</td>
+                    <td>{{banking}}%</td>
+                    <td>{{investments}}%</td>
+                    <td>{{loansCredit}}%</td>
+                    <td>{{taxPlanning}}%</td>
+                    <td>{{total}}%</td>
+                    <td>{{batchRank}}</td>
+                    <td>{{zonalRank}}</td>
+                </tr>
+                {{/each}}
+            </tbody>
+        </table>
+
+        <h2>Level-2 Awards & Certificate Information:</h2>
+        <ol>
+            {{#each level2Awards}}
+            <li><span class="highlight">{{title}}:</span> {{description}}</li>
+            {{/each}}
+        </ol>
+
+        <h2>Batch Grade 6-8</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Student Roll No</th>
+                    <th>Name</th>
+                    <th>Class</th>
+                    <th>Money</th>
+                    <th>Financial Planning</th>
+                    <th>Banking</th>
+                    <th>Investments</th>
+                    <th>Loans & Credit</th>                    
+                    <th>Total</th>
+                    <th>All India Rank</th>
+                    <th>Zonal Rank</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{#each level2Grade6to8}}
+                <tr>
+                    <td>{{rollNo}}</td>
+                    <td>{{name}}</td>
+                    <td>{{class}}</td>
+                    <td>{{money}}%</td>
+                    <td>{{financialPlanning}}%</td>
+                    <td>{{banking}}%</td>
+                    <td>{{investments}}%</td>
+                    <td>{{loansCredit}}%</td>                   
+                    <td>{{total}}%</td>
+                    <td>{{allIndiaRank}}</td>
+                    <td>{{zonalRank}}</td>
+                </tr>
+                {{/each}}
+            </tbody>
+        </table>
+
+        <h2>Batch Grade 9-10</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Student Roll No</th>
+                    <th>Name</th>
+                    <th>Class</th>
+                    <th>Money</th>
+                    <th>Financial Planning</th>
+                    <th>Banking</th>
+                    <th>Investments</th>
+                    <th>Loans & Credit</th>               
+                    <th>Total</th>
+                    <th>All India Rank</th>
+                    <th>Zonal Rank</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{#each level2Grade9to10}}
+                <tr>
+                    <td>{{rollNo}}</td>
+                    <td>{{name}}</td>
+                    <td>{{class}}</td>
+                    <td>{{money}}%</td>
+                    <td>{{financialPlanning}}%</td>
+                    <td>{{banking}}%</td>
+                    <td>{{investments}}%</td>
+                    <td>{{loansCredit}}%</td>       
+                    <td>{{total}}%</td>
+                    <td>{{allIndiaRank}}</td>
+                    <td>{{zonalRank}}</td>
+                </tr>
+                {{/each}}
+            </tbody>
+        </table>
+
+        <h2>Batch Grade 11-12</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Student Roll No</th>
+                    <th>Name</th>
+                    <th>Class</th>
+                    <th>Money</th>
+                    <th>Financial Planning</th>
+                    <th>Banking</th>
+                    <th>Investments</th>
+                    <th>Loans & Credit</th>
+                    <th>Tax Planning</th>
+                    <th>Total</th>
+                    <th>All India Rank</th>
+                    <th>Zonal Rank</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{#each level2Grade11to12}}
+                <tr>
+                    <td>{{rollNo}}</td>
+                    <td>{{name}}</td>
+                    <td>{{class}}</td>
+                    <td>{{money}}%</td>
+                    <td>{{financialPlanning}}%</td>
+                    <td>{{banking}}%</td>
+                    <td>{{investments}}%</td>
+                    <td>{{loansCredit}}%</td>
+                    <td>{{taxPlanning}}%</td>
+                    <td>{{total}}%</td>
+                    <td>{{allIndiaRank}}</td>
+                    <td>{{zonalRank}}</td>
+                </tr>
+                {{/each}}
+            </tbody>
+        </table>
+    </script>
+
+    <script>
+        // Sample data
+        const data = {
+            schoolName: "Meridian School for Boys and Girls",
+            schoolLocation: "Banjara Hills",
+            logoPath: "images/image1.png",
+            level1Average: 63.86,
+            zoneLevel1Average: 41.54,
+            nationalLevel1Average: 41.54,
+            level2Average: 88.59,
+            zoneLevel2Average: 64.4,
+            nationalLevel2Average: 62.36,
+            totalRegistered: 16,
+            totalParticipated: 14,
+            participationRate: 87.5,
+            highestParticipationGrade: "Grade X (10th)",
+            level1TopScorers: [
+                { grade: "Grade 6-8", name: "" },
+                { grade: "Grade 9-10", name: "" },
+                { grade: "Grade 11-12", name: "Myiesha Tharani" }
+            ],
+            level2TopScorers: [
+                { grade: "Grade 6-8", name: "" },
+                { grade: "Grade 9-10", name: "" },
+                { grade: "Grade 11-12", name: "Mohak Agarwal" }
+            ],
+            outperformedPercentage: 48,
+            zone: "South",
+            level1Awards: [
+                { title: "Top 3 Ranks", description: "Outstanding performance certificates for Level-1" },
+                { title: "Ranks >3", description: "Participation certificates for Level-1" },
+                { title: "All participants", description: "Participants' level-1 performance reports" }
+            ],
+            level2Awards: [
+                { title: "Top 3 Ranks - Nationals Winner", description: "Cash Prize of ₹20,000, ₹10,000 and ₹5,000 for 1st, 2nd and 3rd ranks respectively, National Trophy S Certificate of Outstanding Performance" },
+                { title: "Top 3 Ranks - Zonal Winner", description: "Cash Prize of ₹3,000, ₹2,000 and ₹1,000 for 1st, 2nd and 3rd ranks respectively, Zonal Trophy S Certificate of Outstanding Zonal Performance" },
+                { title: "National Ranks 4 - 25", description: "Cash Prize of ₹500, Certificate of National Excellence" },
+                { title: "Zonal Ranks 4 - 10", description: "Certificate of Zonal Excellence" },
+                { title: "Ranks > 25", description: "Merit e-Certificates" }
+            ],
+            level1Grade6to8: Array.from({ length: 10 }, (_, i) => ({
+                rollNo: `BAW1100${i + 1}`,
+                name: `Student ${i + 1}`,
+                class: `${Math.floor(Math.random() * 3) + 9}`,
+                money: (Math.random() * 100).toFixed(2),
+                financialPlanning: (Math.random() * 100).toFixed(2),
+                banking: (Math.random() * 100).toFixed(2),
+                investments: (Math.random() * 100).toFixed(2),
+                loansCredit: (Math.random() * 100).toFixed(2),
+                taxPlanning: (Math.random() * 100).toFixed(2),
+                total: (Math.random() * 100).toFixed(2),
+                batchRank: `${Math.floor(Math.random() * 100) + 1}`,
+                zonalRank: `${Math.floor(Math.random() * 50) + 1}`
+            })),
+            level1Grade9to10: Array.from({ length: 10 }, (_, i) => ({
+                rollNo: `BAW1100${i + 1}`,
+                name: `Student ${i + 1}`,
+                class: `${Math.floor(Math.random() * 3) + 9}`,
+                money: (Math.random() * 100).toFixed(2),
+                financialPlanning: (Math.random() * 100).toFixed(2),
+                banking: (Math.random() * 100).toFixed(2),
+                investments: (Math.random() * 100).toFixed(2),
+                loansCredit: (Math.random() * 100).toFixed(2),
+                taxPlanning: (Math.random() * 100).toFixed(2),
+                total: (Math.random() * 100).toFixed(2),
+                batchRank: `${Math.floor(Math.random() * 100) + 1}`,
+                zonalRank: `${Math.floor(Math.random() * 50) + 1}`
+            })),
+            level1Grade11to12: Array.from({ length: 10 }, (_, i) => ({
+                rollNo: `BAW1100${i + 1}`,
+                name: `Student ${i + 1}`,
+                class: `${Math.floor(Math.random() * 3) + 9}`,
+                money: (Math.random() * 100).toFixed(2),
+                financialPlanning: (Math.random() * 100).toFixed(2),
+                banking: (Math.random() * 100).toFixed(2),
+                investments: (Math.random() * 100).toFixed(2),
+                loansCredit: (Math.random() * 100).toFixed(2),
+                taxPlanning: (Math.random() * 100).toFixed(2),
+                total: (Math.random() * 100).toFixed(2),
+                batchRank: `${Math.floor(Math.random() * 100) + 1}`,
+                zonalRank: `${Math.floor(Math.random() * 50) + 1}`
+            })),
+            level2Grade6to8: Array.from({ length: 10 }, (_, i) => ({
+                rollNo: `BAW1100${i + 1}`,
+                name: `Student ${i + 1}`,
+                class: `${Math.floor(Math.random() * 3) + 9}`,
+                money: (Math.random() * 100).toFixed(2),
+                financialPlanning: (Math.random() * 100).toFixed(2),
+                banking: (Math.random() * 100).toFixed(2),
+                investments: (Math.random() * 100).toFixed(2),
+                loansCredit: (Math.random() * 100).toFixed(2),
+                taxPlanning: (Math.random() * 100).toFixed(2),
+                total: (Math.random() * 100).toFixed(2),
+                allIndiaRank: `${Math.floor(Math.random() * 100) + 1}`,
+                zonalRank: `${Math.floor(Math.random() * 50) + 1}`
+            })),
+            level2Grade9to10: Array.from({ length: 10 }, (_, i) => ({
+                rollNo: `BAW1100${i + 1}`,
+                name: `Student ${i + 1}`,
+                class: `${Math.floor(Math.random() * 3) + 9}`,
+                money: (Math.random() * 100).toFixed(2),
+                financialPlanning: (Math.random() * 100).toFixed(2),
+                banking: (Math.random() * 100).toFixed(2),
+                investments: (Math.random() * 100).toFixed(2),
+                loansCredit: (Math.random() * 100).toFixed(2),
+                taxPlanning: (Math.random() * 100).toFixed(2),
+                total: (Math.random() * 100).toFixed(2),
+                allIndiaRank: `${Math.floor(Math.random() * 100) + 1}`,
+                zonalRank: `${Math.floor(Math.random() * 50) + 1}`
+            })),
+            level2Grade11to12: Array.from({ length: 10 }, (_, i) => ({
+                rollNo: `BAW1100${i + 1}`,
+                name: `Student ${i + 1}`,
+                class: `${Math.floor(Math.random() * 3) + 9}`,
+                money: (Math.random() * 100).toFixed(2),
+                financialPlanning: (Math.random() * 100).toFixed(2),
+                banking: (Math.random() * 100).toFixed(2),
+                investments: (Math.random() * 100).toFixed(2),
+                loansCredit: (Math.random() * 100).toFixed(2),
+                taxPlanning: (Math.random() * 100).toFixed(2),
+                total: (Math.random() * 100).toFixed(2),
+                allIndiaRank: `${Math.floor(Math.random() * 100) + 1}`,
+                zonalRank: `${Math.floor(Math.random() * 50) + 1}`
+            }))
+        };
+
+        // Wait for the DOM to be fully loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Get the template source
+            const templateSource = document.getElementById('report-template').innerHTML;
+            
+            // Compile the template
+            const template = Handlebars.compile(templateSource);
+            
+            // Render the template with the data
+            const renderedContent = template(data);
+            
+            // Update the content
+            document.getElementById('report-content').innerHTML = renderedContent;
+            
+            // Log the data and rendered content for debugging
+            console.log('Data:', data);
+            console.log('Rendered Content:', renderedContent);
+
+            const ctx = document.getElementById('averagesChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['School Average', 'Zone Average', 'National Average'],
+                    datasets: [{
+                        label: 'Level-1 Scores Comparison (%)',
+                        data: [data.level1Average, data.zoneLevel1Average, data.nationalLevel1Average],
+                        backgroundColor: [
+                            'rgba(52, 69, 78, 0.8)',  // School color
+                            'rgba(52, 69, 78, 0.6)',  // Zone color
+                            'rgba(52, 69, 78, 0.4)'   // National color
+                        ],
+                        borderColor: [
+                            '#34454E',
+                            '#34454E',
+                            '#34454E'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        title: {
+                            display: true,
+                            text: 'Level-1 Performance Comparison',
+                            font: {
+                                size: 16,
+                                weight: 'bold'
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
