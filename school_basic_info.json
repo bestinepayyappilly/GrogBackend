@@ -1,0 +1,45 @@
+{
+  "school_report": {
+    "school_details": {
+      "school_name": "Sample School",
+      "school_code": "SCH001",
+      "district": "Sample District",
+      "state": "Sample State",
+      "academic_year": "2024-25",
+      "total_students": 500,
+      "total_teachers": 25,
+      "school_category": "Secondary",
+      "school_type": "Government",
+      "medium_of_instruction": "English",
+      "location": "Urban",
+      "establishment_year": 1990,
+      "principal_name": "John Doe",
+      "contact_number": "1234567890",
+      "email": "sample.school@example.com",
+      "address": "123 School Street, Sample City",
+      "pincode": "123456"
+    },
+    "infrastructure": {
+      "classrooms": 20,
+      "laboratories": 3,
+      "library_books": 5000,
+      "computer_lab": true,
+      "playground": true,
+      "drinking_water": true,
+      "electricity": true,
+      "toilets": true,
+      "ramp_for_disabled": true,
+      "internet_facility": true
+    },
+    "staff_details": {
+      "total_teachers": 25,
+      "male_teachers": 10,
+      "female_teachers": 15,
+      "trained_teachers": 20,
+      "untrained_teachers": 5,
+      "teachers_with_phd": 2,
+      "teachers_with_masters": 15,
+      "teachers_with_bachelors": 8
+    }
+  }
+} 

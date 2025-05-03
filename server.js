@@ -16,22 +16,54 @@ const colors = require("colors");
 const app = express();
 const port = process.env.PORT || 8080;
 
+// Increase payload size limit
+app.use(bodyParser.json({ limit: "50mb" }));
+app.use(bodyParser.urlencoded({ limit: "50mb", extended: true }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
+
 process.setMaxListeners(20); // Increase max listeners limit
 
 app.use(express.json());
-app.use(fileUpload(), cors());
+app.use(
+  fileUpload({
+    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
+    useTempFiles: false,
+    debug: true,
+    createParentPath: true,
+  }),
+  cors()
+);
 app.use(express.static("public"));
 let CSVData = [];
+const CSV_FILE_PATH = path.join(__dirname, "temp_csv_data.json");
+
 const handleParseCSV = (csvString) => {
   Papa.parse(csvString, {
     header: true,
     dynamicTyping: true,
     skipEmptyLines: true,
     complete: (result) => {
+      console.log("CSV parsing complete. Rows:", result.data.length);
       CSVData = result.data;
+      // Save CSV data to file
+      fs.writeFileSync(CSV_FILE_PATH, JSON.stringify(CSVData));
+      console.log("CSV data saved to file");
+    },
+    error: (error) => {
+      console.error("CSV parsing error:", error);
     },
   });
 };
+
+// Load CSV data from file if it exists
+if (fs.existsSync(CSV_FILE_PATH)) {
+  try {
+    CSVData = JSON.parse(fs.readFileSync(CSV_FILE_PATH, "utf8"));
+  } catch (error) {
+    console.error("Error loading CSV data:", error);
+  }
+}
 
 const generateHTML = (data, template) => {
   const compiledTemplate = Handlebars.compile(template);
@@ -91,11 +123,69 @@ const generatePDF = async (html) => {
 };
 
 app.post("/api/upload_csv", (req, res) => {
-  const fileValue = req.files.file.data;
-  const csv = new Buffer.from(fileValue).toString();
+  console.log("Received CSV upload request");
+  console.log("Request files:", req.files);
+  console.log("Request body:", req.body);
 
-  handleParseCSV(csv);
-  res.send({ message: "received csv file" });
+  if (!req.files || !req.files.file) {
+    console.error("No file uploaded");
+    return res.status(400).send("No file uploaded");
+  }
+
+  const fileValue = req.files.file.data;
+  console.log("File size:", fileValue.length);
+  console.log("File name:", req.files.file.name);
+  console.log("File mimetype:", req.files.file.mimetype);
+
+  // Save raw file content for debugging
+  fs.writeFileSync("debug_raw_file.txt", fileValue);
+
+  // Try different encodings
+  let csv;
+  try {
+    csv = fileValue.toString("utf8");
+  } catch (e) {
+    try {
+      csv = fileValue.toString("latin1");
+    } catch (e) {
+      console.error("Failed to decode file with both utf8 and latin1");
+      return res.status(400).send({ error: "Failed to decode file" });
+    }
+  }
+
+  // Save decoded content for debugging
+  fs.writeFileSync("debug_decoded_file.txt", csv);
+
+  console.log("CSV content length:", csv.length);
+  console.log("First 100 characters of CSV:", csv.substring(0, 100));
+
+  // Normalize line endings
+  csv = csv.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
+  Papa.parse(csv, {
+    header: true,
+    dynamicTyping: true,
+    skipEmptyLines: true,
+    complete: (result) => {
+      console.log("CSV parsing complete. Rows:", result.data.length);
+      if (result.data.length === 0) {
+        console.error("No data found in CSV");
+        return res.status(400).send({ error: "No data found in CSV" });
+      }
+      CSVData = result.data;
+      // Save CSV data to file
+      fs.writeFileSync(CSV_FILE_PATH, JSON.stringify(CSVData));
+      console.log(
+        "CSV data saved to file. First row:",
+        JSON.stringify(CSVData[0])
+      );
+      res.send({ message: "received csv file" });
+    },
+    error: (error) => {
+      console.error("CSV parsing error:", error);
+      res.status(500).send({ error: "Error parsing CSV file" });
+    },
+  });
 });
 
 app.get("/", (req, res) => {
@@ -325,6 +415,7 @@ class ProcessTracker {
 }
 
 app.post("/api/upload-html", async (req, res) => {
+  console.log("Received upload-html request");
   const tempDir = "temp_pdfs";
   const errorLog = {
     failedPDFs: [],
@@ -337,20 +428,32 @@ app.post("/api/upload-html", async (req, res) => {
 
   try {
     const { typeId } = req.body;
-    const pdfData = generatePDF(getHtml(typeId));
-    errorLog.totalAttempted = pdfData.length;
+    console.log("TypeId:", typeId);
+    const template = getHtml(typeId);
+    console.log("Template loaded");
+
+    // Check if CSV data is available
+    if (!CSVData || CSVData.length === 0) {
+      console.log("No CSV data available");
+      throw new Error("No CSV data available. Please upload a CSV file first.");
+    }
+    console.log("CSV data available, rows:", CSVData.length);
+
+    errorLog.totalAttempted = CSVData.length;
 
     // Initialize progress tracker
     console.log("\nStarting PDF generation process...".cyan);
-    tracker = new ProcessTracker(pdfData.length);
+    tracker = new ProcessTracker(CSVData.length);
 
     // Ensure temp directory exists
     if (!fs.existsSync(tempDir)) {
+      console.log("Creating temp directory");
       fs.mkdirSync(tempDir, { recursive: true });
     }
 
     // Clean up old files before starting new generation
     const oldFiles = fs.readdirSync(tempDir);
+    console.log("Cleaning up old files:", oldFiles.length);
     for (const file of oldFiles) {
       fs.unlinkSync(`${tempDir}/${file}`);
     }
@@ -360,12 +463,44 @@ app.post("/api/upload-html", async (req, res) => {
     });
 
     zipArchive.on("error", (err) => {
+      console.error("Zip archive error:", err);
       throw err;
     });
 
     // Set up response and cleanup after response is finished
     res.contentType("application/zip");
     res.attachment("pdfs.zip");
+
+    // Process each row in CSV data
+    for (let i = 0; i < CSVData.length; i++) {
+      try {
+        console.log(`Processing row ${i + 1}/${CSVData.length}`);
+        const data = CSVData[i];
+        const html = generateHTML(data, template);
+        const pdf = await generatePDF(html);
+
+        const fileName = `${data.student_username || `pdf_${i}`}.pdf`;
+        const filePath = path.join(tempDir, fileName);
+
+        await fs.promises.writeFile(filePath, pdf);
+        zipArchive.file(filePath, { name: fileName });
+
+        errorLog.successCount++;
+        tracker.update();
+      } catch (error) {
+        console.error(`Error processing row ${i}:`, error);
+        errorLog.failureCount++;
+        errorLog.failedPDFs.push({
+          index: i,
+          error: error.message,
+        });
+      }
+    }
+
+    console.log("Finalizing zip archive");
+    // Finalize the zip archive
+    await zipArchive.finalize();
+    zipArchive.pipe(res);
 
     // Handle cleanup after response is complete
     res.on("finish", () => {
@@ -389,68 +524,13 @@ app.post("/api/upload-html", async (req, res) => {
         });
       }
     });
-
-    zipArchive.pipe(res);
-
-    // Process PDFs in batches of 10
-    const BATCH_SIZE = 10;
-    const allResults = [];
-
-    for (let i = 0; i < pdfData.length; i += BATCH_SIZE) {
-      const batchResults = await processPDFBatch(
-        pdfData,
-        typeId,
-        i,
-        BATCH_SIZE
-      );
-      allResults.push(...batchResults);
-
-      // Add successful PDFs to zip as they're generated
-      for (const result of batchResults) {
-        tracker.update();
-
-        if (result.success) {
-          errorLog.successCount++;
-          const fileName =
-            CSVData[result.index].student_username || `pdf_${result.index}`; // Fallback if name is undefined
-          const pdfFilename = `${tempDir}/${fileName}.pdf`;
-          await fs.promises.writeFile(pdfFilename, result.buffer);
-          zipArchive.file(pdfFilename, { name: `${fileName}.pdf` }); // Specify name in archive
-        } else {
-          errorLog.failureCount++;
-          errorLog.failedPDFs.push({
-            name: CSVData[result.index].name,
-            error: result.error,
-          });
-        }
-      }
-    }
-
-    // Stop the progress bar
-    tracker.stop();
-
-    // Print final summary
-    console.log("\nGeneration Complete!".green);
-    console.log(`Successfully generated: ${errorLog.successCount}`.green);
-    if (errorLog.failureCount > 0) {
-      console.log(`Failed to generate: ${errorLog.failureCount}`.red);
-    }
-
-    // Finalize zip archive
-    await zipArchive.finalize();
   } catch (error) {
+    console.error("Error in PDF generation:", error);
     if (tracker) tracker.stop();
-    console.error("\nError processing request:".red, error);
-
-    // Clean up on error
-    if (fs.existsSync(tempDir)) {
-      const files = fs.readdirSync(tempDir);
-      for (const file of files) {
-        fs.unlinkSync(`${tempDir}/${file}`);
-      }
-      fs.rmdirSync(tempDir);
-    }
-    res.status(500).send(`Error processing request: ${error.message}`);
+    res.status(500).json({
+      error: error.message,
+      details: errorLog,
+    });
   }
 });
 
@@ -949,7 +1029,7 @@ app.post("/api/generate-school-report", async (req, res) => {
           topPerformers: schoolData.topPerformers,
 
           // Asset paths
-          logoPath: getBase64Image(path.join(__dirname, "public/vector.svg")),
+          logoPath: getBase64Image(path.join(__dirname, "public/logo.svg")),
           vectorIcon: getBase64Image(path.join(__dirname, "public/Vector.png")),
           statsIcon: getBase64Image(
             path.join(__dirname, "public/material-symbols_trophy.png")
@@ -957,6 +1037,9 @@ app.post("/api/generate-school-report", async (req, res) => {
           backgroundImage: getBase64Image(
             path.join(__dirname, "public/cert-assets/background.png")
           ),
+          performersIcon:
+            getBase64Image(path.join(__dirname, "public/WatermarkIcon.png")) ||
+            "",
 
           // Font paths
           oggTextBook: getBase64Font(
@@ -1142,9 +1225,13 @@ Handlebars.registerHelper("getParentContext", function (property) {
   return this[property] || this.root[property];
 });
 
-// Add this near your other Handlebars helpers
+// Update the lookup helper with safety check
 Handlebars.registerHelper("lookup", function (obj, field) {
-  return obj[field];
+  // Check if obj exists before trying to access field
+  if (obj && typeof obj === "object") {
+    return obj[field];
+  }
+  return ""; // Return empty string if obj is undefined or not an object
 });
 
 Handlebars.registerHelper("getStateFromSchool", function (schoolName) {
@@ -1239,32 +1326,32 @@ const generateSchoolReports = async (schoolsData) => {
         level1: {
           "Batch Grade 6 - 8": schoolData.level1["Batch Grade 6 - 8"].map(
             (student) => ({
-              "Student Roll No": student["Student Roll No"],
-              Name: student.Name ? student.Name.toUpperCase() : "-",
-              Class: student.Class,
-              "Total Score": student.Total + "%",
-              "Zonal Rank": student["Zonal Rank"],
-              "AIR*": student["All India Rank"],
+              ...student,
+              _parent: {
+                schoolName: schoolData.schoolName,
+                zone: schoolData.zone,
+                logoPath: transformedData.logoPath,
+              },
             })
           ),
           "Batch Grade 9 - 10": schoolData.level1["Batch Grade 9 - 10"].map(
             (student) => ({
-              "Student Roll No": student["Student Roll No"],
-              Name: student.Name ? student.Name.toUpperCase() : "-",
-              Class: student.Class,
-              "Total Score": student.Total + "%",
-              "Zonal Rank": student["Zonal Rank"],
-              "AIR*": student["All India Rank"],
+              ...student,
+              _parent: {
+                schoolName: schoolData.schoolName,
+                zone: schoolData.zone,
+                logoPath: transformedData.logoPath,
+              },
             })
           ),
           "Batch Grade 11 - 12": schoolData.level1["Batch Grade 11 - 12"].map(
             (student) => ({
-              "Student Roll No": student["Student Roll No"],
-              Name: student.Name ? student.Name.toUpperCase() : "-",
-              Class: student.Class,
-              "Total Score": student.Total + "%",
-              "Zonal Rank": student["Zonal Rank"],
-              "AIR*": student["All India Rank"],
+              ...student,
+              _parent: {
+                schoolName: schoolData.schoolName,
+                zone: schoolData.zone,
+                logoPath: transformedData.logoPath,
+              },
             })
           ),
         },
@@ -1274,39 +1361,39 @@ const generateSchoolReports = async (schoolsData) => {
           "Batch Grade 6 - 8": (
             schoolData.level2["Batch Grade 6 - 8"] || []
           ).map((student) => ({
-            "Student Roll No": student["Student Roll No"] || "-",
-            Name: student.Name || "-",
-            Class: student.Class || "-",
-            "Total Score": student.Total + "%",
-            "Zonal Rank": student["Zonal Rank"],
-            "AIR*": student["All India Rank"],
+            ...student,
+            _parent: {
+              schoolName: schoolData.schoolName,
+              zone: schoolData.zone,
+              logoPath: transformedData.logoPath,
+            },
           })),
           "Batch Grade 9 - 10": (
             schoolData.level2["Batch Grade 9 - 10"] || []
           ).map((student) => ({
-            "Student Roll No": student["Student Roll No"] || "-",
-            Name: student.Name || "-",
-            Class: student.Class || "-",
-            "Total Score": student.Total + "%",
-            "Zonal Rank": student["Zonal Rank"],
-            "AIR*": student["All India Rank"],
+            ...student,
+            _parent: {
+              schoolName: schoolData.schoolName,
+              zone: schoolData.zone,
+              logoPath: transformedData.logoPath,
+            },
           })),
           "Batch Grade 11 - 12": (
             schoolData.level2["Batch Grade 11 - 12"] || []
           ).map((student) => ({
-            "Student Roll No": student["Student Roll No"] || "-",
-            Name: student.Name || "-",
-            Class: student.Class || "-",
-            "Total Score": student.Total + "%",
-            "Zonal Rank": student["Zonal Rank"],
-            "AIR*": student["All India Rank"],
+            ...student,
+            _parent: {
+              schoolName: schoolData.schoolName,
+              zone: schoolData.zone,
+              logoPath: transformedData.logoPath,
+            },
           })),
         },
 
         topPerformers: schoolData.topPerformers,
 
         // Update image paths to match your actual files
-        logoPath: getBase64Image(path.join(__dirname, "public/vector.svg")),
+        logoPath: getBase64Image(path.join(__dirname, "public/logo.svg")),
         vectorIcon:
           getBase64Image(path.join(__dirname, "public/Vector.png")) || "",
         statsIcon:
@@ -1317,6 +1404,9 @@ const generateSchoolReports = async (schoolsData) => {
           getBase64Image(
             path.join(__dirname, "public/cert-assets/background.png")
           ) || "",
+        performersIcon:
+          getBase64Image(path.join(__dirname, "public/WatermarkIcon.png")) ||
+          "",
 
         // Update font paths to match your actual files
         oggTextBook:

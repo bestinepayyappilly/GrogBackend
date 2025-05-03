@@ -64,12 +64,13 @@
         width: 595px;
         height: 840px;
         border: 5.5px solid var(--border-blue);
-        background-color: #fffbff;
+        background-color: linear-gradient(to bottom, #ffffff 0%, #ffffff 100%);;
         position: relative;
         overflow: hidden;
+        background-repeat: no-repeat;
         background-image: url("{{backgroundImage}}");
         background-size: cover;
-        background-position: center;
+        background-position: 50% 50%;
         background-repeat: no-repeat;
       }
 
@@ -277,6 +278,16 @@
         flex-direction: column;
         margin: 20px 42px;
         gap: 40px;
+        position: relative;
+      }
+
+      .performers-decoration {
+        position: absolute;
+        right: 40px;
+        bottom: 140px;
+        width: 120px;
+        height: 120px;
+        z-index: 1;
       }
 
       .performers-grid {
@@ -327,13 +338,10 @@
 
       /* Analysis Page Specific Styles */
       .detailed-analysis {
-        background: linear-gradient(to bottom, #ffffff 0%, #f0f8ff 100%);
+        background: linear-gradient(to bottom, #ffffff 0%, #ffffff 100%);
         position: relative;
         page-break-after: always;
-        background-image: url("{{backgroundImage}}");
-        background-size: cover;
-        background-position: center;
-        background-repeat: no-repeat;
+        
       }
 
       .analysis-section {
@@ -415,6 +423,32 @@
         font-size: 14px;
         font-weight: bold;
       }
+
+      .no-participants {
+        color: #888888; /* Gray color for No Participants */
+        font-style: italic;
+      }
+
+      .score-separator {
+        width: 100%;
+        margin: 2rem 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .gradient-line {
+        width: 80%;
+        height: 0.83px;
+        background: linear-gradient(90deg, 
+          rgba(255,255,255,0) 0%, 
+          rgba(0,0,0,0.1) 20%, 
+          rgba(0,0,0,0.2) 50%, 
+          rgba(0,0,0,0.1) 80%, 
+          rgba(255,255,255,0) 100%
+        );
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+      }
     </style>
   </head>
   <body>
@@ -423,7 +457,7 @@
       <header class="header">
         <div class="school-info">
           <h1 class="school-title">School Level Report</h1>
-          <h2 class="{{getSchoolNameClass schoolName}}">{{schoolName}}</h2>
+          <h2 class="{{getSchoolNameClass schoolName }}">{{schoolName}}</h2>
         </div>
         <div class="zone-info">
           <img class="zone-logo" src="{{logoPath}}" alt="Logo" />
@@ -437,6 +471,9 @@
           </div>
         </div>
       </header>
+      <div class="score-separator">
+        <div class="gradient-line"></div>
+      </div>
 
       <!-- Scores Section -->
       <section class="scores-section">
@@ -451,6 +488,7 @@
             </div>
             <div class="score-value">{{levelASchoolAverage}}%</div>
           </div>
+         
           <div class="averages">
             <div class="average-item">
               <div class="average-label">{{zone}} zone average</div>
@@ -504,91 +542,92 @@
 
       <!-- Top Performers Section -->
       <section class="performers-section">
+       
 
           <!-- Level 1 Performers -->
-          {{#if (or 
-              topPerformers.level1.[Grade 6-8] 
-              topPerformers.level1.[Grade 9-10] 
-              topPerformers.level1.[Grade 11-12]
-          )}}
+        {{#if (or 
+            topPerformers.level1.[Grade 6-8] 
+            topPerformers.level1.[Grade 9-10] 
+            topPerformers.level1.[Grade 11-12]
+        )}}
           <div class="performer-column">
             <div class="performer-header">
               <div class="level-title">Level 1</div>
               <div class="score-divider"></div>
-              <div class="score-subtitle">The top performers from<br/>your school in Level-1:</div>
+            <div class="score-subtitle">The top performers from<br/>your school in Level-1:</div>
             </div>
             <div class="performer-grades">
               <div class="grade-item">
                 <strong>Grade 6-8:</strong>
-                {{#if topPerformers.level1.[Grade 6-8]}}
-                    {{topPerformers.level1.[Grade 6-8]}}
-                {{else}}
-                    No Participants
-                {{/if}}
+              {{#if topPerformers.level1.[Grade 6-8]}}
+                {{topPerformers.level1.[Grade 6-8]}}
+              {{else}}
+                <span class="no-participants">No Participants</span>
+              {{/if}}
               </div>
               <div class="grade-item">
                 <strong>Grade 9-10:</strong>
-                {{#if topPerformers.level1.[Grade 9-10]}}
-                    {{topPerformers.level1.[Grade 9-10]}}
-                {{else}}
-                    No Participants
-                {{/if}}
+              {{#if topPerformers.level1.[Grade 9-10]}}
+                {{topPerformers.level1.[Grade 9-10]}}
+              {{else}}
+                <span class="no-participants">No Participants</span>
+              {{/if}}
               </div>
               <div class="grade-item">
                 <strong>Grade 11-12:</strong>
-                {{#if topPerformers.level1.[Grade 11-12]}}
-                    {{topPerformers.level1.[Grade 11-12]}}
-                {{else}}
-                    No Participants
-                {{/if}}
-              </div>
+              {{#if topPerformers.level1.[Grade 11-12]}}
+                {{topPerformers.level1.[Grade 11-12]}}
+              {{else}}
+                <span class="no-participants">No Participants</span>
+              {{/if}}
             </div>
           </div>
-          {{/if}}
-        
+        </div>
+        {{/if}}
+      
           <!-- Level 2 Performers -->
-          {{#if (or 
-              topPerformers.level2.[Grade 6-8] 
-              topPerformers.level2.[Grade 9-10] 
-              topPerformers.level2.[Grade 11-12]
-          )}}
+        {{#if (or 
+            topPerformers.level2.[Grade 6-8] 
+            topPerformers.level2.[Grade 9-10] 
+            topPerformers.level2.[Grade 11-12]
+        )}}
           <div class="performer-column">
             <div class="performer-header">
               <div class="level-title">Level 2</div>
               <div class="score-divider"></div>
-              <div class="score-subtitle">The top performers from<br/>your school in Level-2:</div>
+            <div class="score-subtitle">The top performers from<br/>your school in Level-2:</div>
             </div>
             <div class="performer-grades">
               <div class="grade-item">
                 <strong>Grade 6-8:</strong>
-                {{#if topPerformers.level2.[Grade 6-8]}}
-                    {{topPerformers.level2.[Grade 6-8]}}
-                {{else}}
-                    No Participants
-                {{/if}}
+              {{#if topPerformers.level2.[Grade 6-8]}}
+                {{topPerformers.level2.[Grade 6-8]}}
+              {{else}}
+                <span class="no-participants">No Participants</span>
+              {{/if}}
               </div>
               <div class="grade-item">
                 <strong>Grade 9-10:</strong>
-                {{#if topPerformers.level2.[Grade 9-10]}}
-                    {{topPerformers.level2.[Grade 9-10]}}
-                {{else}}
-                    No Participants
-                {{/if}}
+              {{#if topPerformers.level2.[Grade 9-10]}}
+                {{topPerformers.level2.[Grade 9-10]}}
+              {{else}}
+                <span class="no-participants">No Participants</span>
+              {{/if}}
               </div>
               <div class="grade-item">
                 <strong>Grade 11-12:</strong>
-                {{#if topPerformers.level2.[Grade 11-12]}}
-                    {{topPerformers.level2.[Grade 11-12]}}
-                {{else}}
-                    No Participants
-                {{/if}}
-              </div>
+              {{#if topPerformers.level2.[Grade 11-12]}}
+                {{topPerformers.level2.[Grade 11-12]}}
+              {{else}}
+                <span class="no-participants">No Participants</span>
+              {{/if}}
+            </div>
             </div>
           </div>
           {{/if}}
   
       </section>
-
+      <img class="performers-decoration" src="{{performersIcon}}" alt="Decoration" />
       <!-- Performance Stats Box -->
       {{#if (and outperformed (gte levelBNationalAverage levelBSchoolAverage))}}
       <div class="stats-box">
@@ -607,7 +646,7 @@
       <header class="header">
         <div class="school-info">
           <h1 class="school-title">School Level Report</h1>
-          <h2 class="{{getSchoolNameClass schoolName}}">{{schoolName}}</h2>
+          <h2 class="{{getSchoolNameClass (lookup ../this 'schoolName')}}">{{lookup ../this 'schoolName'}}</h2>
         </div>
         <div class="zone-info">
           <img class="zone-logo" src="{{lookup ../this 'logoPath'}}" alt="Logo" />
@@ -658,7 +697,7 @@
       <header class="header">
         <div class="school-info">
           <h1 class="school-title">School Level Report</h1>
-          <h2 class="{{getSchoolNameClass schoolName}}">{{schoolName}}</h2>
+          <h2 class="{{getSchoolNameClass (lookup ../this 'schoolName')}}">{{lookup ../this 'schoolName'}}</h2>
         </div>
         <div class="zone-info">
           <img class="zone-logo" src="{{lookup ../this 'logoPath'}}" alt="Logo" />
@@ -708,7 +747,7 @@
       <header class="header">
         <div class="school-info">
           <h1 class="school-title">School Level Report</h1>
-          <h2 class="{{getSchoolNameClass schoolName}}">{{schoolName}}</h2>
+          <h2 class="{{getSchoolNameClass (lookup ../this 'schoolName')}}">{{lookup ../this 'schoolName'}}</h2>
         </div>
         <div class="zone-info">
           <img class="zone-logo" src="{{lookup ../this 'logoPath'}}" alt="Logo" />
@@ -759,7 +798,7 @@
       <header class="header">
         <div class="school-info">
           <h1 class="school-title">School Level Report</h1>
-          <h2 class="{{getSchoolNameClass schoolName}}">{{schoolName}}</h2>
+          <h2 class="{{getSchoolNameClass (lookup ../this 'schoolName')}}">{{lookup ../this 'schoolName'}}</h2>
         </div>
         <div class="zone-info">
           <img class="zone-logo" src="{{lookup ../this 'logoPath'}}" alt="Logo" />
@@ -813,7 +852,7 @@
       <header class="header">
         <div class="school-info">
           <h1 class="school-title">School Level Report</h1>
-          <h2 class="{{getSchoolNameClass schoolName}}">{{schoolName}}</h2>
+          <h2 class="{{getSchoolNameClass (lookup ../this 'schoolName')}}">{{lookup ../this 'schoolName'}}</h2>
         </div>
         <div class="zone-info">
           <img class="zone-logo" src="{{lookup ../this 'logoPath'}}" alt="Logo" />
@@ -867,7 +906,7 @@
       <header class="header">
         <div class="school-info">
           <h1 class="school-title">School Level Report</h1>
-          <h2 class="{{getSchoolNameClass schoolName}}">{{schoolName}}</h2>
+          <h2 class="{{getSchoolNameClass (lookup ../this 'schoolName')}}">{{lookup ../this 'schoolName'}}</h2>
         </div>
         <div class="zone-info">
           <img class="zone-logo" src="{{lookup ../this 'logoPath'}}" alt="Logo" />
