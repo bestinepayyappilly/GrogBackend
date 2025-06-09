@@ -67,18 +67,37 @@ const generatePDF = async (html) => {
       timeout: 60000,
     });
 
-    // Wait for fonts to load
-    await page.evaluateHandle("document.fonts.ready");
+    // Wait for fonts to load with explicit checks
+    await page.evaluate(() => {
+      return new Promise((resolve) => {
+        if (document.fonts && document.fonts.ready) {
+          document.fonts.ready.then(() => {
+            // Additional wait to ensure fonts are processed
+            setTimeout(resolve, 2000);
+          });
+        } else {
+          setTimeout(resolve, 5000);
+        }
+      });
+    });
+
+    // Check if fonts are actually loaded
+    const fontsLoaded = await page.evaluate(() => {
+      return (
+        document.fonts &&
+        document.fonts.check &&
+        document.fonts.check('16px "Ogg Text-Book"') &&
+        document.fonts.check('16px "Ogg Text-Bold"')
+      );
+    });
+
+    console.log("Fonts loaded:", fontsLoaded);
+
+    const config = getPageConfig(type);
 
     const pdf = await page.pdf({
-      format: "A4",
+      ...config,
       printBackground: true,
-      margin: {
-        top: "20px",
-        right: "20px",
-        bottom: "20px",
-        left: "20px",
-      },
       preferCSSPageSize: true,
     });
 
@@ -181,6 +200,16 @@ function getPageConfig(type) {
         format: "A4",
         portrait: true,
       };
+    case 21:
+      return {
+        format: "A4",
+        width: "210mm",
+        height: "297mm",
+        margin: { top: "0mm", right: "0mm", bottom: "0mm", left: "0mm" },
+        printBackground: true,
+        landscape: false,
+        preferCSSPageSize: true,
+      };
     default:
       return {
         width: "250mm",
@@ -198,24 +227,47 @@ async function generatePDFWithPuppeteer(html, type) {
       "--disable-setuid-sandbox",
       "--disable-dev-shm-usage",
       "--disable-gpu",
+      "--disable-font-subpixel-positioning",
+      "--disable-features=TranslateUI",
+      "--disable-web-security",
+      "--disable-features=VizDisplayCompositor",
+      "--memory-pressure-off",
+      "--max_old_space_size=4096",
     ],
-    timeout: 120000, // Increased timeout to 120 seconds
+    timeout: 60000,
   });
 
   try {
     const page = await browser.newPage();
-    await page.setDefaultNavigationTimeout(120000); // Increased navigation timeout
-    await page.setContent(html, { waitUntil: "networkidle0", timeout: 120000 });
+
+    // Optimized viewport for faster rendering
+    await page.setViewport({
+      width: 600,
+      height: 800,
+      deviceScaleFactor: 1.2,
+    });
+
+    await page.setDefaultNavigationTimeout(60000);
+    await page.setContent(html, { waitUntil: "networkidle2", timeout: 60000 });
+
+    // Streamlined font loading - reduced wait time
+    await page.evaluate(() => {
+      return new Promise((resolve) => {
+        if (document.fonts && document.fonts.ready) {
+          document.fonts.ready.then(() => {
+            setTimeout(resolve, 1000);
+          });
+        } else {
+          setTimeout(resolve, 2000);
+        }
+      });
+    });
 
     const config = getPageConfig(type);
     const pdf = await page.pdf({
       ...config,
       printBackground: true,
-      scale: 1.35,
-      format: "A4",
-      landscape: false,
-      width: "210mm",
-      height: "297mm",
+      preferCSSPageSize: true,
     });
 
     return pdf;
@@ -226,21 +278,26 @@ async function generatePDFWithPuppeteer(html, type) {
   }
 }
 
-// Helper function to process PDFs in batches
+// Helper function to process PDFs in batches with parallel processing
 async function processPDFBatch(pdfData, typeId, startIdx, batchSize) {
   const batch = pdfData.slice(startIdx, startIdx + batchSize);
-  const results = [];
 
-  for (const item of batch) {
+  // Process PDFs in parallel within the batch
+  const promises = batch.map(async (item) => {
     try {
       const buffer = await generatePDFWithPuppeteer(item.html, typeId);
-      results.push({ buffer, index: item.index, success: true });
+      return { buffer, index: item.index, success: true };
     } catch (error) {
-      console.error(`Error generating PDF for index ${item.index}:`, error);
-      results.push({ index: item.index, success: false, error: error.message });
+      console.error(
+        `Error generating PDF for index ${item.index}:`,
+        error.message
+      );
+      return { index: item.index, success: false, error: error.message };
     }
-  }
+  });
 
+  // Wait for all PDFs in the batch to complete
+  const results = await Promise.all(promises);
   return results;
 }
 
@@ -275,33 +332,42 @@ class ProcessTracker {
 
   update(count = 1) {
     const currentTime = Date.now();
-    const timeSinceLastUpdate = (currentTime - this.lastUpdateTime) / 1000; // in seconds
-    this.lastUpdateTime = currentTime;
-
-    // Store processing time for this batch
-    this.recentTimes.push(timeSinceLastUpdate);
-    // Keep only last 5 times for averaging
-    if (this.recentTimes.length > 5) {
-      this.recentTimes.shift();
-    }
-
     this.processedItems += count;
-    const elapsedTime = (currentTime - this.startTime) / 1000; // in seconds
 
-    // Calculate average time per item using recent times
-    const avgTimePerItem =
-      this.recentTimes.reduce((a, b) => a + b, 0) / this.recentTimes.length;
-    const remainingItems = this.totalItems - this.processedItems;
-    const estimatedRemainingTime = avgTimePerItem * remainingItems;
+    // Update progress bar less frequently for better performance
+    if (
+      this.processedItems % 5 === 0 ||
+      this.processedItems === this.totalItems
+    ) {
+      const timeSinceLastUpdate = (currentTime - this.lastUpdateTime) / 1000;
+      this.lastUpdateTime = currentTime;
 
-    // Calculate speed (PDFs per minute)
-    const speed = Math.round((this.processedItems / elapsedTime) * 60);
+      // Store processing time for this batch
+      this.recentTimes.push(timeSinceLastUpdate);
+      // Keep only last 5 times for averaging
+      if (this.recentTimes.length > 5) {
+        this.recentTimes.shift();
+      }
 
-    this.mainBar.update(this.processedItems, {
-      eta: this.formatTime(estimatedRemainingTime),
-      duration: this.formatTime(elapsedTime),
-      speed: `${speed} PDFs/min`,
-    });
+      const elapsedTime = (currentTime - this.startTime) / 1000;
+
+      // Calculate average time per item using recent times
+      const avgTimePerItem =
+        this.recentTimes.reduce((a, b) => a + b, 0) /
+        this.recentTimes.length /
+        5; // Divide by 5 since we update every 5 items
+      const remainingItems = this.totalItems - this.processedItems;
+      const estimatedRemainingTime = avgTimePerItem * remainingItems;
+
+      // Calculate speed (PDFs per minute)
+      const speed = Math.round((this.processedItems / elapsedTime) * 60);
+
+      this.mainBar.update(this.processedItems, {
+        eta: this.formatTime(estimatedRemainingTime),
+        duration: this.formatTime(elapsedTime),
+        speed: `${speed} PDFs/min`,
+      });
+    }
   }
 
   formatTime(seconds) {
@@ -334,10 +400,34 @@ app.post("/api/upload-html", async (req, res) => {
   };
 
   let tracker;
+  const usedFilenames = new Set(); // Track used filenames to prevent duplicates
 
   try {
     const { typeId } = req.body;
-    const pdfData = generatePDF(getHtml(typeId));
+    // FIX: Generate HTMLs for each CSV row
+    const template = getHtml(typeId);
+    const pdfData = CSVData.map((row, idx) => {
+      // For NFO Invite (typeId 21), map "Customer Name" to "customerName" and add font data
+      let mappedRow = row;
+      if (typeId === 21) {
+        mappedRow = {
+          ...row,
+          customerName: row["Customer Name"],
+          // Add font data for NFO Invite (same as school reports)
+          oggTextBook: getBase64Font(
+            path.join(__dirname, "public/fonts/OggText-Book.ttf")
+          ),
+          oggTextBold: getBase64Font(
+            path.join(__dirname, "public/fonts/OggText-Bold.ttf")
+          ),
+        };
+      }
+
+      return {
+        html: generateHTML(mappedRow, template),
+        index: idx,
+      };
+    });
     errorLog.totalAttempted = pdfData.length;
 
     // Initialize progress tracker
@@ -392,8 +482,8 @@ app.post("/api/upload-html", async (req, res) => {
 
     zipArchive.pipe(res);
 
-    // Process PDFs in batches of 10
-    const BATCH_SIZE = 10;
+    // Process PDFs in larger batches for better performance
+    const BATCH_SIZE = 25; // Increased from 10 to 25
     const allResults = [];
 
     for (let i = 0; i < pdfData.length; i += BATCH_SIZE) {
@@ -411,18 +501,48 @@ app.post("/api/upload-html", async (req, res) => {
 
         if (result.success) {
           errorLog.successCount++;
-          const fileName =
-            CSVData[result.index].student_username || `pdf_${result.index}`; // Fallback if name is undefined
-          const pdfFilename = `${tempDir}/${fileName}.pdf`;
+
+          // Generate filename with collision detection
+          let fileName;
+          if (typeId === 21) {
+            // Use Customer Name for NFO invites
+            const customerName = CSVData[result.index]["Customer Name"];
+            fileName = generateSafeFilename(customerName, result.index);
+          } else {
+            // Use existing logic for other templates with index fallback
+            const username = CSVData[result.index].student_username;
+            fileName = username
+              ? `${username}_${String(result.index).padStart(4, "0")}`
+              : `pdf_${String(result.index).padStart(4, "0")}`;
+          }
+
+          // Additional safety check for filename uniqueness
+          let finalFileName = fileName;
+          let counter = 1;
+          while (usedFilenames.has(finalFileName)) {
+            finalFileName = `${fileName}_dup${counter}`;
+            counter++;
+          }
+          usedFilenames.add(finalFileName);
+
+          const pdfFilename = `${tempDir}/${finalFileName}.pdf`;
           await fs.promises.writeFile(pdfFilename, result.buffer);
-          zipArchive.file(pdfFilename, { name: `${fileName}.pdf` }); // Specify name in archive
+          zipArchive.file(pdfFilename, { name: `${finalFileName}.pdf` });
         } else {
           errorLog.failureCount++;
           errorLog.failedPDFs.push({
-            name: CSVData[result.index].name,
+            name:
+              CSVData[result.index]["Customer Name"] ||
+              CSVData[result.index].name ||
+              `Unknown_${result.index}`,
             error: result.error,
           });
         }
+      }
+
+      // Force garbage collection between batches to free memory
+      if (global.gc) {
+        global.gc();
       }
     }
 
@@ -803,6 +923,61 @@ const getHtml = (typeid) => {
 
       return template;
     }
+    case 21: {
+      template = fs.readFileSync(__dirname + "/html/NFOInvite.html", "utf-8");
+
+      // Get base64 strings for all images
+      const nfoInviteImage = getBase64Image(
+        path.join(__dirname, "public/cert-assets/nfo-invite-2.png")
+      );
+      const qrCodeImage = getBase64Image(
+        path.join(__dirname, "public/cert-assets/image-1204.png")
+      );
+      const frameImage1 = getBase64Image(
+        path.join(__dirname, "public/cert-assets/frame-11889.png")
+      );
+      const frameImage2 = getBase64Image(
+        path.join(__dirname, "public/cert-assets/frame-11887.png")
+      );
+      const frameImage3 = getBase64Image(
+        path.join(__dirname, "public/cert-assets/frame-11889-1.png")
+      );
+      const groupImage = getBase64Image(
+        path.join(__dirname, "public/cert-assets/group-11805.png")
+      );
+
+      // Debug: Check if font files exist and log their sizes
+      const oggMediumPath = path.join(
+        __dirname,
+        "public/fonts/OggText-Medium.ttf"
+      );
+      const oggBoldPath = path.join(__dirname, "public/fonts/OggText-Bold.ttf");
+
+      console.log("Font file checks:");
+      console.log("OggText-Medium exists:", fs.existsSync(oggMediumPath));
+      console.log("OggText-Bold exists:", fs.existsSync(oggBoldPath));
+
+      if (fs.existsSync(oggMediumPath)) {
+        const stats = fs.statSync(oggMediumPath);
+        console.log("OggText-Medium size:", stats.size, "bytes");
+      }
+
+      if (fs.existsSync(oggBoldPath)) {
+        const stats = fs.statSync(oggBoldPath);
+        console.log("OggText-Bold size:", stats.size, "bytes");
+      }
+
+      // Replace only image paths with base64 strings
+      template = template
+        .replace("{{nfoInviteImage}}", nfoInviteImage)
+        .replace("{{qrCodeImage}}", qrCodeImage)
+        .replace("{{frameImage1}}", frameImage1)
+        .replace("{{frameImage2}}", frameImage2)
+        .replace("{{frameImage3}}", frameImage3)
+        .replace("{{groupImage}}", groupImage);
+
+      return template;
+    }
     default: {
       template = fs.readFileSync(
         __dirname + "/html/ReportsWOTax.html",
@@ -812,6 +987,28 @@ const getHtml = (typeid) => {
   }
 
   return template;
+};
+
+// Helper function to generate safe filename from customer name with unique index
+const generateSafeFilename = (customerName, index) => {
+  let baseName;
+
+  if (!customerName || customerName.trim() === "") {
+    baseName = "customer";
+  } else {
+    // Remove special characters and replace spaces with underscores
+    baseName = customerName
+      .trim()
+      .replace(/[^a-zA-Z0-9\s]/g, "") // Remove special characters
+      .replace(/\s+/g, "_") // Replace spaces with underscores
+      .toLowerCase();
+  }
+
+  // Always append the index to ensure uniqueness
+  // Pad the index with zeros for better sorting (e.g., 001, 002, etc.)
+  const paddedIndex = String(index).padStart(4, "0");
+
+  return baseName ? `${baseName}_${paddedIndex}` : `customer_${paddedIndex}`;
 };
 
 // Modify your existing generate-school-report route
@@ -982,7 +1179,7 @@ app.post("/api/generate-school-report", async (req, res) => {
         const html = compiledTemplate(transformedData);
 
         // Generate PDF
-        const pdf = await generatePDFWithPuppeteer(html);
+        const pdf = await generatePDFWithPuppeteer(html, schoolData.type);
 
         // Create sanitized filename
         const sanitizedSchoolName = schoolData.schoolName
@@ -1177,6 +1374,8 @@ Handlebars.registerHelper("getStateFromSchool", function (schoolName) {
     "Uttar Pradesh",
     "Uttarakhand",
     "West Bengal",
+    "Delhi",
+    "Jammu and Kashmir",
   ];
 
   // Find matching state in school name
@@ -1484,3 +1683,19 @@ Handlebars.registerHelper(
     return !(schoolAvg < nationalAvg);
   }
 );
+
+// Add this near your other Handlebars helpers
+Handlebars.registerHelper("capitalizeFirst", function (str) {
+  if (!str || typeof str !== "string") {
+    return str;
+  }
+
+  // Split by spaces and capitalize first letter of each word
+  return str
+    .split(" ")
+    .map((word) => {
+      if (word.length === 0) return word;
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(" ");
+});

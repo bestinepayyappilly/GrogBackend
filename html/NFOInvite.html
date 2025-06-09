@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NFO Invite</title>
+  
+  <style>
+    @import url("https://cdnjs.cloudflare.com/ajax/libs/meyer-reset/2.0/reset.min.css");
+    @import url("https://fonts.googleapis.com/css?family=Public+Sans:400,700");
+    
+    @font-face {
+      font-family: "Ogg Text-Book";
+      src: url("{{oggTextBook}}") format("truetype");
+      font-weight: normal;
+      font-style: normal;
+      font-display: swap;
+    }
+    
+    @font-face {
+      font-family: "Ogg Text-Bold";
+      src: url("{{oggTextBold}}") format("truetype");
+      font-weight: bold;
+      font-style: normal;
+      font-display: swap;
+    }
+    
+    :root {
+      --blue: rgba(40, 57, 139, 1);
+      --orange: rgba(249, 108, 29, 1);
+      --black: rgba(0, 0, 0, 1);
+      --light-blue: rgba(241, 250, 253, 1);
+    }
+
+    * {
+      -webkit-font-smoothing: antialiased;
+      box-sizing: border-box;
+    }
+    
+    html,
+    body {
+      margin: 0px;
+      height: 100%;
+    }
+    
+    button:focus-visible {
+      outline: 2px solid #4a90e2 !important;
+      outline: -webkit-focus-ring-color auto 5px !important;
+    }
+    
+    a {
+      text-decoration: none;
+    }
+    
+    .a {
+      background-color: #ffffff;
+      display: flex;
+      flex-direction: row;
+      justify-content: center;
+      width: 100%;
+      page-break-inside: avoid;
+    }
+
+    .a .div {
+      background-color: #ffffff;
+      width: 595px;
+      height: 842px;
+      position: relative;
+      margin: 0 auto;
+      transform: scale(1.6);
+      transform-origin: top center;
+    }
+
+    .a .overlap {
+      position: absolute;
+      width: 548px;
+      height: 379px;
+      top: 119px;
+      left: 30px;
+    }
+
+    .a .we-just-need-a-few {
+      position: absolute;
+      width: 196px;
+      height: 80px;
+      top: 137px;
+      left: 136px;
+      font-family: "Public Sans", Helvetica;
+      font-weight: 400;
+      color: #225288;
+      font-size: 14px;
+      letter-spacing: 0;
+      line-height: 16px;
+    }
+
+    .a .text-wrapper {
+      font-weight: 500;
+    }
+
+    .a .span {
+      font-weight: 800;
+      text-decoration: underline;
+    }
+
+    .a .overlap-group {
+      position: absolute;
+      width: 548px;
+      height: 379px;
+      top: 0;
+      left: 0;
+    }
+
+    .a .p {
+      position: absolute;
+      width: 400px;
+      height: 72px;
+      top: 307px;
+      left: 0;
+      font-family: "Ogg Text-Book", Helvetica;
+      font-weight: normal;
+      color: #225288;
+      font-size: 18px;
+      letter-spacing: 0;
+      line-height: normal;
+    }
+
+    .a .text-wrapper-2 {
+      position: absolute;
+      width: 380px;
+      top: 243px;
+      left: 0;
+      font-family: "Ogg Text-Book", Helvetica;
+      font-weight: normal;
+      color: #f86b1c;
+      font-size: 18px;
+      letter-spacing: 0;
+      line-height: 22px;
+    }
+
+    .a .NFO-invite {
+      position: absolute;
+      width: 192px;
+      height: 337px;
+      top: 0;
+      left: 356px;
+      z-index: -1;
+    }
+
+    .a .dear-name-we-are {
+      position: absolute;
+      width: 332px;
+      top: 4px;
+      left: 0;
+      font-family: "Ogg Text-Book", Helvetica;
+      font-weight: normal;
+      color: #225288;
+      font-size: 18px;
+      letter-spacing: 0;
+      line-height: 22px;
+    }
+
+    .a .group {
+      position: absolute;
+      width: 116px;
+      height: 113px;
+      top: 112px;
+      left: 0;
+    }
+
+    .a .overlap-group-2 {
+      position: relative;
+      width: 114px;
+      height: 113px;
+    }
+
+    .a .rectangle {
+      position: absolute;
+      width: 114px;
+      height: 109px;
+      top: 4px;
+      left: 0;
+      border-radius: 10px;
+      border: 1px solid;
+      border-color: #98c0dd;
+    }
+
+    .a .rectangle-2 {
+      position: absolute;
+      width: 100px;
+      height: 93px;
+      top: 13px;
+      left: 7px;
+      border-radius: 10px;
+      border: 1.5px solid;
+      border-color: #96aac5;
+    }
+
+    .a .rectangle-3 {
+      position: absolute;
+      width: 96px;
+      height: 11px;
+      top: 1px;
+      left: 9px;
+      background-color: #ffffff;
+    }
+
+    .a .text-wrapper-3 {
+      position: absolute;
+      height: 9px;
+      top: 0;
+      left: 12px;
+      font-family: "Public Sans", Helvetica;
+      font-weight: 700;
+      color: #225288;
+      font-size: 8px;
+      text-align: center;
+      letter-spacing: 0;
+      line-height: normal;
+      white-space: nowrap;
+    }
+
+    .a .image {
+      position: absolute;
+      width: 85px;
+      height: 86px;
+      top: 17px;
+      left: 15px;
+    }
+
+    .a .text-wrapper-4 {
+      position: absolute;
+      width: 450px;
+      height: 38px;
+      top: 777px;
+      left: 80px;
+      opacity: 0.85;
+      font-family: "Public Sans", Helvetica;
+      font-weight: 400;
+      color: #225288;
+      font-size: 16px;
+      text-align: center;
+      letter-spacing: 0;
+      line-height: normal;
+    }
+
+    .a .over-students {
+      position: absolute;
+      width: 356px;
+      height: 38px;
+      top: 723px;
+      left: 120px;
+      font-family: "Public Sans", Helvetica;
+      font-weight: 400;
+      color: #225288;
+      font-size: 16px;
+      text-align: center;
+      letter-spacing: 0;
+      line-height: normal;
+    }
+
+    .a .will-your-child-be {
+      position: absolute;
+      width: 399px;
+      top: 31px;
+      left: 30px;
+      font-family: "Ogg Text-Bold", Helvetica;
+      font-weight: bold;
+      color: #225288;
+      font-size: 30px;
+      letter-spacing: 0;
+      line-height: 35px;
+    }
+
+    .a .group-wrapper {
+      position: absolute;
+      width: 518px;
+      height: 170px;
+      top: 525px;
+      left: 30px;
+    }
+
+    .a .group-2 {
+      position: relative;
+      height: 170px;
+    }
+
+    .a .frame {
+      left: 0;
+      position: absolute;
+      width: 147px;
+      height: 169px;
+      top: 0;
+    }
+
+    .a .img {
+      left: 186px;
+      position: absolute;
+      width: 147px;
+      height: 169px;
+      top: 0;
+    }
+
+    .a .frame-2 {
+      position: absolute;
+      width: 147px;
+      height: 169px;
+      top: 0;
+      left: 371px;
+    }
+
+    .a .group-3 {
+      position: absolute;
+      width: 126px;
+      height: 56px;
+      top: 32px;
+      left: 445px;
+    }
+
+    @media print {
+      .a {
+        width: 210mm;
+        height: 297mm;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+      }
+      
+      .a .div {
+        transform: scale(1.25);
+        transform-origin: top center;
+      }
+      
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      
+      @page {
+        size: A4 portrait;
+        margin: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="a">
+    <div class="div">
+      <div class="overlap">
+        <p class="we-just-need-a-few">
+          <span class="text-wrapper"
+            >We just need a few more details. Scan the QR code<br />or visit us at<br
+          /></span>
+          <a href="https://arb.wiki/nfoaxb" target="_blank" rel="noopener noreferrer"
+            ><span class="span">https://arb.wiki/nfoaxb<br /></span
+          ></a>
+          <span class="text-wrapper">to complete the registration.</span>
+        </p>
+        <div class="overlap-group">
+          <p class="p">
+            Kids have started learning with the Personal Finance Handbook — now it's time to put that knowledge to the
+            test on a national stage!
+          </p>
+          <p class="text-wrapper-2">Get an exclusive 40% off as you have purchased the Personal Finance Handbook</p>
+          <img class="NFO-invite" src="{{nfoInviteImage}}" />
+        </div>
+        <p class="dear-name-we-are">
+          Dear {{capitalizeFirst customerName}},<br />We are thrilled to invite your child to participate in the National Finance Olympiad,
+          happening this July.
+        </p>
+        <div class="group">
+          <div class="overlap-group-2">
+            <div class="rectangle"></div>
+            <div class="rectangle-2"></div>
+            <div class="rectangle-3"></div>
+            <p class="text-wrapper-3">scan code to learn more</p>
+            <img class="image" src="{{qrCodeImage}}" />
+          </div>
+        </div>
+      </div>
+      <p class="text-wrapper-4">Scan the QR code or visit <a href="https://www.nationalfinanceolympiad.com/nfo-handbook-reg" target="_blank" rel="noopener noreferrer" style="color: #225288; text-decoration: underline;">www.nationalfinanceolympiad.com/nfo-handbook-reg</a> today!</p>
+      <p class="over-students">
+        Over 40,000+ students &amp; 500+ schools are participating, is your kid one of them?
+      </p>
+      <p class="will-your-child-be">Will Your Child Be India's&nbsp;Next Finance Wiz?</p>
+      <div class="group-wrapper">
+        <div class="group-2">
+          <img class="frame" src="{{frameImage1}}" />
+          <img class="img" src="{{frameImage2}}" />
+          <img class="frame-2" src="{{frameImage3}}" />
+        </div>
+      </div>
+      <img class="group-3" src="{{groupImage}}" />
+    </div>
+  </div>
+</body>
+</html> 

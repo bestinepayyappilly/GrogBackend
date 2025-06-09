@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test PDF Generation</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 50px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        input, button { margin: 10px 0; padding: 10px; }
+        button { background: #007bff; color: white; border: none; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .result { margin-top: 20px; padding: 10px; background: #f8f9fa; border: 1px solid #dee2e6; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Test NFO Invite Generation</h1>
+        
+        <div>
+            <h3>Step 1: Upload CSV</h3>
+            <input type="file" id="csvFile" accept=".csv" />
+            <button onclick="uploadCSV()">Upload CSV</button>
+        </div>
+        
+        <div>
+            <h3>Step 2: Generate PDFs</h3>
+            <label>Type ID: <input type="number" id="typeId" value="21" /></label>
+            <button onclick="generatePDFs()">Generate NFO Invites</button>
+        </div>
+        
+        <div id="result" class="result" style="display:none;"></div>
+    </div>
+
+    <script>
+        async function uploadCSV() {
+            const file = document.getElementById('csvFile').files[0];
+            if (!file) {
+                alert('Please select a CSV file');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const response = await fetch('/api/upload_csv', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                document.getElementById('result').style.display = 'block';
+                document.getElementById('result').innerHTML = `<strong>CSV Upload:</strong> ${result.message}`;
+            } catch (error) {
+                alert('Error uploading CSV: ' + error.message);
+            }
+        }
+        
+        async function generatePDFs() {
+            const typeId = parseInt(document.getElementById('typeId').value);
+            
+            try {
+                const response = await fetch('/api/upload-html', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ typeId })
+                });
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    a.download = 'nfo-invites.zip';
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    
+                    document.getElementById('result').innerHTML += '<br><strong>PDFs Generated:</strong> Download started!';
+                } else {
+                    const error = await response.text();
+                    alert('Error generating PDFs: ' + error);
+                }
+            } catch (error) {
+                alert('Error generating PDFs: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html> 
