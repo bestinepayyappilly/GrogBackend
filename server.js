@@ -308,13 +308,14 @@ class ProcessTracker {
     this.totalItems = totalItems;
     this.processedItems = 0;
     this.recentTimes = []; // Store recent processing times for better averaging
+    this.currentStatus = "Initializing...";
 
     // Create a multibar container
     this.multibar = new cliProgress.MultiBar({
       clearOnComplete: false,
       hideCursor: true,
       format:
-        "[{bar}] {percentage}% | {value}/{total} PDFs | Speed: {speed} | ETA: {eta} | Elapsed: {duration}",
+        "[{bar}] {percentage}% | {value}/{total} PDFs | Speed: {speed} | ETA: {eta} | Status: {status}",
       barCompleteChar: "█",
       barIncompleteChar: "░",
     });
@@ -324,6 +325,7 @@ class ProcessTracker {
       eta: "calculating...",
       duration: "0s",
       speed: "0 PDFs/min",
+      status: this.currentStatus,
     });
 
     // Store last update time for speed calculation
@@ -366,8 +368,30 @@ class ProcessTracker {
         eta: this.formatTime(estimatedRemainingTime),
         duration: this.formatTime(elapsedTime),
         speed: `${speed} PDFs/min`,
+        status: this.currentStatus,
       });
     }
+  }
+
+  updateStatus(status) {
+    this.currentStatus = status;
+    // Update the bar with current status immediately
+    const currentTime = Date.now();
+    const elapsedTime = (currentTime - this.startTime) / 1000;
+    const speed = Math.round((this.processedItems / elapsedTime) * 60) || 0;
+
+    this.mainBar.update(this.processedItems, {
+      eta:
+        this.processedItems > 0
+          ? this.formatTime(
+              (this.totalItems - this.processedItems) /
+                (this.processedItems / elapsedTime)
+            )
+          : "calculating...",
+      duration: this.formatTime(elapsedTime),
+      speed: `${speed} PDFs/min`,
+      status: this.currentStatus,
+    });
   }
 
   formatTime(seconds) {
@@ -403,16 +427,23 @@ app.post("/api/upload-html", async (req, res) => {
   const usedFilenames = new Set(); // Track used filenames to prevent duplicates
 
   try {
-    const { typeId } = req.body;
+    const { typeId, singlePDF = false } = req.body; // Add singlePDF option
+
+    if (singlePDF) {
+      // Generate single PDF with multiple pages
+      return await generateSinglePDFWithMultiplePages(req, res, typeId);
+    }
+
     // FIX: Generate HTMLs for each CSV row
     const template = getHtml(typeId);
     const pdfData = CSVData.map((row, idx) => {
-      // For NFO Invite (typeId 21), map "Customer Name" to "customerName" and add font data
+      // For NFO Invite (typeId 21), map first_name and add font data
       let mappedRow = row;
       if (typeId === 21) {
         mappedRow = {
           ...row,
-          customerName: row["Customer Name"],
+          customerName:
+            row["first_name"] || row["First Name"] || row["first_name"], // Support multiple column name formats
           // Add font data for NFO Invite (same as school reports)
           oggTextBook: getBase64Font(
             path.join(__dirname, "public/fonts/OggText-Book.ttf")
@@ -505,9 +536,20 @@ app.post("/api/upload-html", async (req, res) => {
           // Generate filename with collision detection
           let fileName;
           if (typeId === 21) {
-            // Use Customer Name for NFO invites
-            const customerName = CSVData[result.index]["Customer Name"];
-            fileName = generateSafeFilename(customerName, result.index);
+            // Use first_name + last_name for NFO invites
+            const firstName =
+              CSVData[result.index]["first_name"] ||
+              CSVData[result.index]["First Name"] ||
+              "";
+            const lastName =
+              CSVData[result.index]["last_name"] ||
+              CSVData[result.index]["Last Name"] ||
+              "";
+            const fullName = `${firstName} ${lastName}`.trim();
+            fileName = generateSafeFilename(
+              fullName || "customer",
+              result.index
+            );
           } else {
             // Use existing logic for other templates with index fallback
             const username = CSVData[result.index].student_username;
@@ -532,7 +574,8 @@ app.post("/api/upload-html", async (req, res) => {
           errorLog.failureCount++;
           errorLog.failedPDFs.push({
             name:
-              CSVData[result.index]["Customer Name"] ||
+              CSVData[result.index]["first_name"] ||
+              CSVData[result.index]["First Name"] ||
               CSVData[result.index].name ||
               `Unknown_${result.index}`,
             error: result.error,
@@ -571,6 +614,303 @@ app.post("/api/upload-html", async (req, res) => {
       fs.rmdirSync(tempDir);
     }
     res.status(500).send(`Error processing request: ${error.message}`);
+  }
+});
+
+// New function to generate single PDF with multiple pages
+async function generateSinglePDFWithMultiplePages(req, res, typeId) {
+  let tracker;
+  try {
+    console.log("\nStarting single PDF generation process...".cyan);
+
+    const template = getHtml(typeId);
+
+    // Sort CSV data alphabetically by first_name, then last_name
+    const sortedCSVData = [...CSVData].sort((a, b) => {
+      const firstNameA = (
+        a["first_name"] ||
+        a["First Name"] ||
+        ""
+      ).toLowerCase();
+      const lastNameA = (a["last_name"] || a["Last Name"] || "").toLowerCase();
+      const firstNameB = (
+        b["first_name"] ||
+        b["First Name"] ||
+        ""
+      ).toLowerCase();
+      const lastNameB = (b["last_name"] || b["Last Name"] || "").toLowerCase();
+
+      // Sort by first name first, then by last name
+      if (firstNameA !== firstNameB) {
+        return firstNameA.localeCompare(firstNameB);
+      }
+      return lastNameA.localeCompare(lastNameB);
+    });
+
+    console.log(
+      `📝 Sorted ${sortedCSVData.length} records alphabetically by name`.yellow
+    );
+
+    // Generate HTML for each sorted CSV row
+    const htmlPages = sortedCSVData.map((row, idx) => {
+      let mappedRow = row;
+      if (typeId === 21) {
+        mappedRow = {
+          ...row,
+          customerName:
+            row["first_name"] || row["First Name"] || row["first_name"], // Support multiple column name formats
+          oggTextBook: getBase64Font(
+            path.join(__dirname, "public/fonts/OggText-Book.ttf")
+          ),
+          oggTextBold: getBase64Font(
+            path.join(__dirname, "public/fonts/OggText-Bold.ttf")
+          ),
+        };
+      }
+
+      return {
+        html: generateHTML(mappedRow, template),
+        originalRow: row, // Keep reference to original row for filename generation
+        sortedIndex: idx,
+      };
+    });
+
+    console.log(
+      `📄 Generated ${htmlPages.length} HTML pages for processing`.yellow
+    );
+    console.log(
+      `🔧 Using optimized approach: Generate individual PDFs then merge`.cyan
+    );
+
+    // Initialize progress tracker
+    tracker = new ProcessTracker(htmlPages.length);
+    tracker.updateStatus("Generating individual PDF pages...");
+
+    // NEW APPROACH: Generate individual PDFs first, then merge them
+    const pdfBuffers = [];
+    const BATCH_SIZE = 10; // Process in smaller batches to avoid memory issues
+
+    for (let i = 0; i < htmlPages.length; i += BATCH_SIZE) {
+      const batch = htmlPages.slice(i, i + BATCH_SIZE);
+      const batchPromises = batch.map(async (pageData, batchIndex) => {
+        const actualIndex = i + batchIndex;
+        const firstName =
+          pageData.originalRow["first_name"] ||
+          pageData.originalRow["First Name"] ||
+          "";
+        const lastName =
+          pageData.originalRow["last_name"] ||
+          pageData.originalRow["Last Name"] ||
+          "";
+        const fullName = `${firstName} ${lastName}`.trim();
+
+        try {
+          tracker.updateStatus(
+            `Processing ${fullName || `page ${actualIndex + 1}`} (${
+              actualIndex + 1
+            }/${htmlPages.length})...`
+          );
+
+          // Generate individual PDF with optimized settings
+          const pdf = await generateOptimizedPDF(pageData.html, typeId);
+          tracker.update();
+          return {
+            pdf,
+            index: actualIndex,
+            success: true,
+            name: fullName,
+            originalRow: pageData.originalRow,
+          };
+        } catch (error) {
+          console.error(
+            `Error generating PDF for ${
+              fullName || `page ${actualIndex + 1}`
+            }:`,
+            error.message
+          );
+          tracker.update();
+          return {
+            index: actualIndex,
+            success: false,
+            error: error.message,
+            name: fullName,
+          };
+        }
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+
+      // Collect successful PDFs (they're already in alphabetical order)
+      batchResults.forEach((result) => {
+        if (result.success) {
+          pdfBuffers.push({
+            buffer: result.pdf,
+            name: result.name,
+            index: result.index,
+          });
+        }
+      });
+
+      // Force garbage collection between batches
+      if (global.gc) {
+        global.gc();
+      }
+    }
+
+    tracker.updateStatus("Merging PDFs into single document...");
+    console.log(
+      `🔗 Merging ${pdfBuffers.length} PDF pages into single document...`.cyan
+    );
+
+    // Extract just the buffers for merging (already in alphabetical order)
+    const sortedBuffers = pdfBuffers.map((item) => item.buffer);
+    console.log(
+      `📊 Processing ${pdfBuffers.length} PDFs in alphabetical order:`.cyan
+    );
+    pdfBuffers.slice(0, 5).forEach((item, i) => {
+      console.log(`  ${i + 1}. ${item.name || "Unknown"}`.gray);
+    });
+    if (pdfBuffers.length > 5) {
+      console.log(`  ... and ${pdfBuffers.length - 5} more`.gray);
+    }
+
+    // Merge all PDF buffers into one
+    const mergedPDF = await mergePDFBuffers(sortedBuffers);
+
+    tracker.stop();
+    console.log(`✅ PDF merging completed successfully!`.green);
+
+    // Set response headers for PDF download
+    const fileName =
+      typeId === 21 ? "nfo_invites_combined.pdf" : "combined_documents.pdf";
+    res.contentType("application/pdf");
+    res.attachment(fileName);
+
+    // Send the PDF
+    res.send(mergedPDF);
+
+    console.log(
+      `✅ Successfully generated single PDF with ${pdfBuffers.length} pages in alphabetical order`
+        .green
+    );
+  } catch (error) {
+    if (tracker) tracker.stop();
+    console.error("\nError generating single PDF:".red, error);
+    res.status(500).send(`Error generating single PDF: ${error.message}`);
+  }
+}
+
+// New optimized PDF generation function for single pages
+async function generateOptimizedPDF(html, type) {
+  const browser = await puppeteer.launch({
+    headless: "new",
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--disable-font-subpixel-positioning",
+      "--disable-features=TranslateUI",
+      "--disable-web-security",
+      "--disable-features=VizDisplayCompositor",
+      "--memory-pressure-off",
+      "--max_old_space_size=2048", // Reduced memory limit
+    ],
+    timeout: 30000, // Reduced timeout
+  });
+
+  try {
+    const page = await browser.newPage();
+
+    // Optimized viewport
+    await page.setViewport({
+      width: 400, // Smaller viewport for faster rendering
+      height: 600,
+      deviceScaleFactor: 1,
+    });
+
+    await page.setDefaultNavigationTimeout(30000);
+    await page.setContent(html, {
+      waitUntil: "domcontentloaded", // Faster loading
+      timeout: 30000,
+    });
+
+    // Minimal font loading wait
+    await page.evaluate(() => {
+      return new Promise((resolve) => {
+        if (document.fonts && document.fonts.ready) {
+          document.fonts.ready.then(() => {
+            setTimeout(resolve, 500); // Reduced wait time
+          });
+        } else {
+          setTimeout(resolve, 1000);
+        }
+      });
+    });
+
+    const config = getPageConfig(type);
+    const pdf = await page.pdf({
+      ...config,
+      printBackground: true,
+      preferCSSPageSize: true,
+    });
+
+    return pdf;
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
+  }
+}
+
+// Simple PDF merger function using native approach
+async function mergePDFBuffers(pdfBuffers) {
+  if (pdfBuffers.length === 0) {
+    throw new Error("No PDF buffers to merge");
+  }
+
+  if (pdfBuffers.length === 1) {
+    return pdfBuffers[0];
+  }
+
+  // Use pdf-lib for proper PDF merging
+  try {
+    const PDFDocument = require("pdf-lib").PDFDocument;
+
+    console.log(`📚 Creating merged PDF document...`.yellow);
+    const mergedPdf = await PDFDocument.create();
+
+    for (let i = 0; i < pdfBuffers.length; i++) {
+      console.log(`📄 Processing page ${i + 1}/${pdfBuffers.length}...`.gray);
+      const pdf = await PDFDocument.load(pdfBuffers[i]);
+      const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+      copiedPages.forEach((page) => mergedPdf.addPage(page));
+    }
+
+    console.log(`💾 Saving merged PDF...`.yellow);
+    const pdfBytes = await mergedPdf.save();
+    return Buffer.from(pdfBytes);
+  } catch (error) {
+    console.error("❌ PDF-lib error:", error.message);
+
+    // Fallback: Return the first PDF if merging fails
+    console.warn("⚠️  PDF merging failed, using fallback approach...".yellow);
+    console.warn("⚠️  Returning first PDF only as fallback.".yellow);
+    return pdfBuffers[0];
+  }
+}
+
+app.post("/api/generate-single-pdf", async (req, res) => {
+  try {
+    const { typeId } = req.body;
+    await generateSinglePDFWithMultiplePages(req, res, typeId);
+  } catch (error) {
+    console.error("Error in single PDF generation:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Error generating single PDF",
+      error: error.message,
+    });
   }
 });
 
@@ -989,18 +1329,19 @@ const getHtml = (typeid) => {
   return template;
 };
 
-// Helper function to generate safe filename from customer name with unique index
-const generateSafeFilename = (customerName, index) => {
+// Helper function to generate safe filename from full name with unique index
+const generateSafeFilename = (fullName, index) => {
   let baseName;
 
-  if (!customerName || customerName.trim() === "") {
+  if (!fullName || fullName.trim() === "") {
     baseName = "customer";
   } else {
     // Remove special characters and replace spaces with underscores
-    baseName = customerName
+    baseName = fullName
       .trim()
       .replace(/[^a-zA-Z0-9\s]/g, "") // Remove special characters
       .replace(/\s+/g, "_") // Replace spaces with underscores
+      .replace(/_+/g, "_") // Replace multiple underscores with single underscore
       .toLowerCase();
   }
 

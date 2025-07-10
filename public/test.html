@@ -4,33 +4,76 @@
     <title>Test PDF Generation</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 50px; }
-        .container { max-width: 600px; margin: 0 auto; }
-        input, button { margin: 10px 0; padding: 10px; }
-        button { background: #007bff; color: white; border: none; cursor: pointer; }
+        .container { max-width: 800px; margin: 0 auto; }
+        input, button, select { margin: 10px 0; padding: 10px; }
+        button { background: #007bff; color: white; border: none; cursor: pointer; border-radius: 4px; }
         button:hover { background: #0056b3; }
-        .result { margin-top: 20px; padding: 10px; background: #f8f9fa; border: 1px solid #dee2e6; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        .single-pdf-btn { background: #28a745; }
+        .single-pdf-btn:hover { background: #218838; }
+        .result { margin-top: 20px; padding: 10px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; }
+        .option-group { 
+            border: 1px solid #dee2e6; 
+            padding: 15px; 
+            margin: 10px 0; 
+            border-radius: 4px; 
+            background: #f8f9fa;
+        }
+        .option-group h4 { margin-top: 0; color: #495057; }
+        .description { font-size: 14px; color: #6c757d; margin-bottom: 10px; }
+        .step { margin-bottom: 30px; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Test NFO Invite Generation</h1>
         
-        <div>
+        <div class="step">
             <h3>Step 1: Upload CSV</h3>
+            <div class="description">
+                Upload your CSV file containing customer data for invite generation.<br>
+                <strong>Required columns for NFO Invites:</strong> <code>first_name</code>, <code>last_name</code><br>
+                <small>Example: John Smith → filename: john_smith_0001.pdf</small>
+            </div>
             <input type="file" id="csvFile" accept=".csv" />
             <button onclick="uploadCSV()">Upload CSV</button>
         </div>
         
-        <div>
-            <h3>Step 2: Generate PDFs</h3>
-            <label>Type ID: <input type="number" id="typeId" value="21" /></label>
-            <button onclick="generatePDFs()">Generate NFO Invites</button>
+        <div class="step">
+            <h3>Step 2: Choose Generation Type & Generate PDFs</h3>
+            <div class="description">Choose between single PDF (all invites in one file) or multiple PDFs (zip)</div>
+            
+            <label>Type ID: <input type="number" id="typeId" value="21" style="width: 60px;" /></label>
+            
+            <div class="option-group">
+                <h4>🗂️ Single PDF Generation</h4>
+                <div class="description">
+                    Generates one PDF file with all invites as separate pages. 
+                    Perfect for easy sharing, printing, or when you need all invites in one document.
+                </div>
+                <button class="single-pdf-btn" onclick="generateSinglePDF()" id="singlePdfBtn">
+                    Generate Single PDF (All Pages)
+                </button>
+            </div>
+            
+            <div class="option-group">
+                <h4>📦 Multiple PDFs (ZIP)</h4>
+                <div class="description">
+                    Generates individual PDF files for each invite and packages them in a ZIP file. 
+                    Useful when you need separate files for each customer.
+                </div>
+                <button onclick="generateMultiplePDFs()" id="multiplePdfBtn">
+                    Generate Multiple PDFs (ZIP)
+                </button>
+            </div>
         </div>
         
         <div id="result" class="result" style="display:none;"></div>
     </div>
 
     <script>
+        let csvUploaded = false;
+
         async function uploadCSV() {
             const file = document.getElementById('csvFile').files[0];
             if (!file) {
@@ -42,24 +85,35 @@
             formData.append('file', file);
             
             try {
+                updateResult('Uploading CSV...', 'info');
+                
                 const response = await fetch('/api/upload_csv', {
                     method: 'POST',
                     body: formData
                 });
                 
                 const result = await response.json();
-                document.getElementById('result').style.display = 'block';
-                document.getElementById('result').innerHTML = `<strong>CSV Upload:</strong> ${result.message}`;
+                csvUploaded = true;
+                updateButtons();
+                updateResult(`✅ CSV Upload: ${result.message}`, 'success');
             } catch (error) {
-                alert('Error uploading CSV: ' + error.message);
+                updateResult(`❌ Error uploading CSV: ${error.message}`, 'error');
             }
         }
         
-        async function generatePDFs() {
+        async function generateSinglePDF() {
+            if (!csvUploaded) {
+                alert('Please upload a CSV file first');
+                return;
+            }
+            
             const typeId = parseInt(document.getElementById('typeId').value);
             
             try {
-                const response = await fetch('/api/upload-html', {
+                updateResult('🔄 Generating single PDF with all invites...', 'info');
+                disableButtons(true);
+                
+                const response = await fetch('/api/generate-single-pdf', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -73,20 +127,114 @@
                     const a = document.createElement('a');
                     a.style.display = 'none';
                     a.href = url;
+                    a.download = typeId === 21 ? 'nfo_invites_combined.pdf' : 'combined_documents.pdf';
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    
+                    updateResult('✅ Single PDF Generated: Download started! All invites are in one PDF file.', 'success');
+                } else {
+                    const error = await response.text();
+                    updateResult(`❌ Error generating single PDF: ${error}`, 'error');
+                }
+            } catch (error) {
+                updateResult(`❌ Error generating single PDF: ${error.message}`, 'error');
+            } finally {
+                disableButtons(false);
+            }
+        }
+        
+        async function generateMultiplePDFs() {
+            if (!csvUploaded) {
+                alert('Please upload a CSV file first');
+                return;
+            }
+            
+            const typeId = parseInt(document.getElementById('typeId').value);
+            
+            try {
+                updateResult('🔄 Generating multiple PDFs (this may take longer)...', 'info');
+                disableButtons(true);
+                
+                const response = await fetch('/api/upload-html', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ typeId, singlePDF: false })
+                });
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
                     a.download = 'nfo-invites.zip';
                     document.body.appendChild(a);
                     a.click();
                     window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
                     
-                    document.getElementById('result').innerHTML += '<br><strong>PDFs Generated:</strong> Download started!';
+                    updateResult('✅ Multiple PDFs Generated: Download started! ZIP file contains individual PDF files.', 'success');
                 } else {
                     const error = await response.text();
-                    alert('Error generating PDFs: ' + error);
+                    updateResult(`❌ Error generating multiple PDFs: ${error}`, 'error');
                 }
             } catch (error) {
-                alert('Error generating PDFs: ' + error.message);
+                updateResult(`❌ Error generating multiple PDFs: ${error.message}`, 'error');
+            } finally {
+                disableButtons(false);
             }
         }
+        
+        function updateResult(message, type) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = message;
+            
+            // Update styling based on type
+            resultDiv.className = 'result';
+            if (type === 'success') {
+                resultDiv.style.background = '#d4edda';
+                resultDiv.style.borderColor = '#c3e6cb';
+                resultDiv.style.color = '#155724';
+            } else if (type === 'error') {
+                resultDiv.style.background = '#f8d7da';
+                resultDiv.style.borderColor = '#f5c6cb';
+                resultDiv.style.color = '#721c24';
+            } else if (type === 'info') {
+                resultDiv.style.background = '#d1ecf1';
+                resultDiv.style.borderColor = '#bee5eb';
+                resultDiv.style.color = '#0c5460';
+            } else {
+                resultDiv.style.background = '#f8f9fa';
+                resultDiv.style.borderColor = '#dee2e6';
+                resultDiv.style.color = '#495057';
+            }
+        }
+        
+        function updateButtons() {
+            const singleBtn = document.getElementById('singlePdfBtn');
+            const multipleBtn = document.getElementById('multiplePdfBtn');
+            
+            if (csvUploaded) {
+                singleBtn.disabled = false;
+                multipleBtn.disabled = false;
+            } else {
+                singleBtn.disabled = true;
+                multipleBtn.disabled = true;
+            }
+        }
+        
+        function disableButtons(disabled) {
+            document.getElementById('singlePdfBtn').disabled = disabled;
+            document.getElementById('multiplePdfBtn').disabled = disabled;
+        }
+        
+        // Initialize button states
+        updateButtons();
     </script>
 </body>
 </html> 
