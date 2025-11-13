@@ -195,10 +195,11 @@ function getPageConfig(type) {
       return {
         width: "297mm",
         height: "210mm",
-        margin: { top: "10mm", right: "10mm", bottom: "10mm", left: "10mm" },
+        margin: { top: "0mm", right: "0mm", bottom: "0mm", left: "0mm" },
         printBackground: true,
         format: "A4",
-        portrait: true,
+        portrait: false,
+        landscape: true,
       };
     case 21:
       return {
@@ -209,6 +210,18 @@ function getPageConfig(type) {
         printBackground: true,
         landscape: false,
         preferCSSPageSize: true,
+      };
+    case 22:
+      return {
+        width: "230mm",
+        height: "164.5mm",
+        margin: { top: "0mm", right: "0mm", bottom: "0mm", left: "0mm" },
+      };
+    case 23:
+      return {
+        width: "230mm",
+        height: "164.5mm",
+        margin: { top: "0mm", right: "0mm", bottom: "0mm", left: "0mm" },
       };
     default:
       return {
@@ -554,7 +567,7 @@ app.post("/api/upload-html", async (req, res) => {
             // Use existing logic for other templates with index fallback
             const username = CSVData[result.index].student_username;
             fileName = username
-              ? `${username}_${String(result.index).padStart(4, "0")}`
+              ? `${username}`
               : `pdf_${String(result.index).padStart(4, "0")}`;
           }
 
@@ -1318,6 +1331,100 @@ const getHtml = (typeid) => {
 
       return template;
     }
+    case 22: {
+      template = fs.readFileSync(
+        __dirname + "/html/KVBSchoolCertificate.html",
+        "utf-8"
+      );
+
+      // Get base64 strings for all images
+      const borderImage = getBase64Image(
+        path.join(
+          __dirname,
+          "public/cert-assets/NationalsExcellenceCertificateBorder.png"
+        )
+      );
+      const logoImage = getBase64Image(
+        path.join(__dirname, "public/vector.svg")
+      );
+      const kvbLogo = getBase64Image(
+        path.join(__dirname, "public/cert-assets/KVBlogo.png")
+      );
+      const underlineImage = getBase64Image(
+        path.join(__dirname, "public/cert-assets/UnderlineKVB.png")
+      );
+      const kvbSignature = getBase64Image(
+        path.join(__dirname, "public/cert-assets/KVBSignature.png")
+      );
+      const streakSignature = getBase64Image(
+        path.join(
+          __dirname,
+          "public/cert-assets/StreakCoFounderSignatureExcellence.png"
+        )
+      );
+      const mitulMehtaSignature = getBase64Image(
+        path.join(__dirname, "public/cert-assets/MitulMehtaSignature.png")
+      );
+
+      // Replace image paths with base64 strings
+      template = template
+        .replace("{{borderImage}}", borderImage)
+        .replace("{{logoImage}}", logoImage)
+        .replace("{{kvbLogo}}", kvbLogo)
+        .replace("{{underlineImage}}", underlineImage)
+        .replace("{{kvbSignature}}", kvbSignature)
+        .replace("{{streakSignature}}", streakSignature)
+        .replace("{{mitulMehtaSignature}}", mitulMehtaSignature);
+
+      return template;
+    }
+    case 23: {
+      template = fs.readFileSync(
+        __dirname + "/html/KVBSchoolCertificateOutstanding.html",
+        "utf-8"
+      );
+
+      // Get base64 strings for all images
+      const borderImage = getBase64Image(
+        path.join(
+          __dirname,
+          "public/cert-assets/NationalsExcellenceCertificateBorder.png"
+        )
+      );
+      const logoImage = getBase64Image(
+        path.join(__dirname, "public/vector.svg")
+      );
+      const kvbLogo = getBase64Image(
+        path.join(__dirname, "public/cert-assets/KVBlogo.png")
+      );
+      const underlineImage = getBase64Image(
+        path.join(__dirname, "public/cert-assets/UnderlineKVB.png")
+      );
+      const kvbSignature = getBase64Image(
+        path.join(__dirname, "public/cert-assets/KVBSignature.png")
+      );
+      const streakSignature = getBase64Image(
+        path.join(
+          __dirname,
+          "public/cert-assets/StreakCoFounderSignatureExcellence.png"
+        )
+      );
+      const mitulMehtaSignature = getBase64Image(
+        path.join(__dirname, "public/cert-assets/MitulMehtaSignature.png")
+      );
+
+      // Replace image paths with base64 strings
+      template = template
+        .replace("{{borderImage}}", borderImage)
+        .replace("{{logoImage}}", logoImage)
+        .replace("{{kvbLogo}}", kvbLogo)
+        .replace("{{underlineImage}}", underlineImage)
+        .replace("{{kvbSignature}}", kvbSignature)
+        .replace("{{streakSignature}}", streakSignature)
+        .replace("{{mitulMehtaSignature}}", mitulMehtaSignature);
+
+      return template;
+    }
     default: {
       template = fs.readFileSync(
         __dirname + "/html/ReportsWOTax.html",
@@ -2039,4 +2146,22 @@ Handlebars.registerHelper("capitalizeFirst", function (str) {
       return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
     })
     .join(" ");
+});
+
+Handlebars.registerHelper("getNameSizeClass", function (name) {
+  if (!name || typeof name !== "string") {
+    return "medium";
+  }
+
+  const nameLength = name.length;
+
+  // Adjust thresholds based on typical name lengths
+  // For 40px font, names longer than ~25 characters may wrap
+  if (nameLength > 25) {
+    return "small"; // 30px
+  } else if (nameLength > 15) {
+    return "medium"; // 40px (default)
+  } else {
+    return "medium"; // 60px
+  }
 });

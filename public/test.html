@@ -74,6 +74,16 @@
     <script>
         let csvUploaded = false;
 
+        // Helper function to get the API base URL
+        function getApiBaseUrl() {
+            // If served through the server, use current origin
+            if (window.location.protocol === 'http:' || window.location.protocol === 'https:') {
+                return window.location.origin;
+            }
+            // Fallback for file:// protocol - use default server port
+            return 'http://localhost:8080';
+        }
+
         async function uploadCSV() {
             const file = document.getElementById('csvFile').files[0];
             if (!file) {
@@ -87,7 +97,7 @@
             try {
                 updateResult('Uploading CSV...', 'info');
                 
-                const response = await fetch('/api/upload_csv', {
+                const response = await fetch(`${getApiBaseUrl()}/api/upload_csv`, {
                     method: 'POST',
                     body: formData
                 });
@@ -113,7 +123,7 @@
                 updateResult('🔄 Generating single PDF with all invites...', 'info');
                 disableButtons(true);
                 
-                const response = await fetch('/api/generate-single-pdf', {
+                const response = await fetch(`${getApiBaseUrl()}/api/generate-single-pdf`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -157,7 +167,7 @@
                 updateResult('🔄 Generating multiple PDFs (this may take longer)...', 'info');
                 disableButtons(true);
                 
-                const response = await fetch('/api/upload-html', {
+                const response = await fetch(`${getApiBaseUrl()}/api/upload-html`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
