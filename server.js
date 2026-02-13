@@ -223,6 +223,24 @@ function getPageConfig(type) {
         height: "164.5mm",
         margin: { top: "0mm", right: "0mm", bottom: "0mm", left: "0mm" },
       };
+    case 24:
+      return {
+        width: "230mm",
+        height: "164.5mm",
+        margin: { top: "0mm", right: "0mm", bottom: "0mm", left: "0mm" },
+      };
+    case 25:
+      return {
+        width: "230mm",
+        height: "164.5mm",
+        margin: { top: "0mm", right: "0mm", bottom: "0mm", left: "0mm" },
+      };
+    case 26:
+      return {
+        width: "230mm",
+        height: "164.5mm",
+        margin: { top: "0mm", right: "0mm", bottom: "0mm", left: "0mm" },
+      };
     default:
       return {
         width: "250mm",
@@ -298,8 +316,10 @@ async function processPDFBatch(pdfData, typeId, startIdx, batchSize) {
   // Process PDFs in parallel within the batch
   const promises = batch.map(async (item) => {
     try {
-      const buffer = await generatePDFWithPuppeteer(item.html, typeId);
-      return { buffer, index: item.index, success: true };
+      // Use row-specific typeId if available, otherwise use the default typeId
+      const rowTypeId = item.typeId || typeId;
+      const buffer = await generatePDFWithPuppeteer(item.html, rowTypeId);
+      return { buffer, index: item.index, success: true, typeId: rowTypeId };
     } catch (error) {
       console.error(
         `Error generating PDF for index ${item.index}:`,
@@ -448,10 +468,30 @@ app.post("/api/upload-html", async (req, res) => {
     }
 
     // FIX: Generate HTMLs for each CSV row
-    const template = getHtml(typeId);
+    // For KVB certificates (typeId 22 or 23), determine template based on airRank
     const pdfData = CSVData.map((row, idx) => {
-      // For NFO Invite (typeId 21), map first_name and add font data
+      let rowTypeId = typeId;
       let mappedRow = row;
+
+      // For KVB certificates, determine typeId based on airRank
+      if (typeId === 22 || typeId === 23) {
+        const airRank = parseInt(
+          row["airRank"] || row["rank"] || row["AirRank"] || "999"
+        );
+        // If airRank <= 10, use Outstanding certificate (23), otherwise use Participation (22)
+        rowTypeId = airRank <= 10 ? 23 : 22;
+      } else if (typeId === 24 || typeId === 25) {
+        const airRank = parseInt(
+          row["airRank"] || row["rank"] || row["AirRank"] || "999"
+        );
+        // If airRank <= 10, use Outstanding IR certificate (25), otherwise use Participation IR (24)
+        rowTypeId = airRank <= 10 ? 25 : 24;
+      }
+
+      // Get the appropriate template for this row
+      const template = getHtml(rowTypeId);
+
+      // For NFO Invite (typeId 21), map first_name and add font data
       if (typeId === 21) {
         mappedRow = {
           ...row,
@@ -470,6 +510,7 @@ app.post("/api/upload-html", async (req, res) => {
       return {
         html: generateHTML(mappedRow, template),
         index: idx,
+        typeId: rowTypeId, // Store the typeId used for this row
       };
     });
     errorLog.totalAttempted = pdfData.length;
@@ -636,8 +677,6 @@ async function generateSinglePDFWithMultiplePages(req, res, typeId) {
   try {
     console.log("\nStarting single PDF generation process...".cyan);
 
-    const template = getHtml(typeId);
-
     // Sort CSV data alphabetically by first_name, then last_name
     const sortedCSVData = [...CSVData].sort((a, b) => {
       const firstNameA = (
@@ -666,7 +705,27 @@ async function generateSinglePDFWithMultiplePages(req, res, typeId) {
 
     // Generate HTML for each sorted CSV row
     const htmlPages = sortedCSVData.map((row, idx) => {
+      let rowTypeId = typeId;
       let mappedRow = row;
+
+      // For KVB certificates, determine typeId based on airRank
+      if (typeId === 22 || typeId === 23) {
+        const airRank = parseInt(
+          row["airRank"] || row["rank"] || row["AirRank"] || "999"
+        );
+        // If airRank <= 10, use Outstanding certificate (23), otherwise use Participation (22)
+        rowTypeId = airRank <= 10 ? 23 : 22;
+      } else if (typeId === 24 || typeId === 25) {
+        const airRank = parseInt(
+          row["airRank"] || row["rank"] || row["AirRank"] || "999"
+        );
+        // If airRank <= 10, use Outstanding IR certificate (25), otherwise use Participation IR (24)
+        rowTypeId = airRank <= 10 ? 25 : 24;
+      }
+
+      // Get the appropriate template for this row
+      const rowTemplate = getHtml(rowTypeId);
+
       if (typeId === 21) {
         mappedRow = {
           ...row,
@@ -682,9 +741,10 @@ async function generateSinglePDFWithMultiplePages(req, res, typeId) {
       }
 
       return {
-        html: generateHTML(mappedRow, template),
+        html: generateHTML(mappedRow, rowTemplate),
         originalRow: row, // Keep reference to original row for filename generation
         sortedIndex: idx,
+        typeId: rowTypeId, // Store the typeId used for this row
       };
     });
 
@@ -725,7 +785,9 @@ async function generateSinglePDFWithMultiplePages(req, res, typeId) {
           );
 
           // Generate individual PDF with optimized settings
-          const pdf = await generateOptimizedPDF(pageData.html, typeId);
+          // Use row-specific typeId if available, otherwise use the default typeId
+          const rowTypeId = pageData.typeId || typeId;
+          const pdf = await generateOptimizedPDF(pageData.html, rowTypeId);
           tracker.update();
           return {
             pdf,
@@ -1416,6 +1478,138 @@ const getHtml = (typeid) => {
       // Replace image paths with base64 strings
       template = template
         .replace("{{borderImage}}", borderImage)
+        .replace("{{logoImage}}", logoImage)
+        .replace("{{kvbLogo}}", kvbLogo)
+        .replace("{{underlineImage}}", underlineImage)
+        .replace("{{kvbSignature}}", kvbSignature)
+        .replace("{{streakSignature}}", streakSignature)
+        .replace("{{mitulMehtaSignature}}", mitulMehtaSignature);
+
+      return template;
+    }
+    case 24: {
+      template = fs.readFileSync(
+        __dirname + "/html/KVBSchoolCertificateIR.html",
+        "utf-8"
+      );
+
+      // Get base64 strings for all images
+      const borderImage = getBase64Image(
+        path.join(
+          __dirname,
+          "public/cert-assets/NationalsExcellenceCertificateBorder.png"
+        )
+      );
+      const logoImage = getBase64Image(
+        path.join(__dirname, "public/vector.svg")
+      );
+      const kvbLogo = getBase64Image(
+        path.join(__dirname, "public/cert-assets/KVBlogo.png")
+      );
+      const underlineImage = getBase64Image(
+        path.join(__dirname, "public/cert-assets/UnderlineKVB.png")
+      );
+      const kvbSignature = getBase64Image(
+        path.join(__dirname, "public/cert-assets/KVBSignature.png")
+      );
+      const streakSignature = getBase64Image(
+        path.join(
+          __dirname,
+          "public/cert-assets/StreakCoFounderSignatureExcellence.png"
+        )
+      );
+      const mitulMehtaSignature = getBase64Image(
+        path.join(__dirname, "public/cert-assets/MitulMehtaSignature.png")
+      );
+
+      // Replace image paths with base64 strings
+      template = template
+        .replace("{{borderImage}}", borderImage)
+        .replace("{{logoImage}}", logoImage)
+        .replace("{{kvbLogo}}", kvbLogo)
+        .replace("{{underlineImage}}", underlineImage)
+        .replace("{{kvbSignature}}", kvbSignature)
+        .replace("{{streakSignature}}", streakSignature)
+        .replace("{{mitulMehtaSignature}}", mitulMehtaSignature);
+
+      return template;
+    }
+    case 25: {
+      template = fs.readFileSync(
+        __dirname + "/html/KVBSchoolCertificateOutstandingIR.html",
+        "utf-8"
+      );
+
+      // Get base64 strings for all images
+      const borderImage = getBase64Image(
+        path.join(
+          __dirname,
+          "public/cert-assets/NationalsExcellenceCertificateBorder.png"
+        )
+      );
+      const logoImage = getBase64Image(
+        path.join(__dirname, "public/vector.svg")
+      );
+      const kvbLogo = getBase64Image(
+        path.join(__dirname, "public/cert-assets/KVBlogo.png")
+      );
+      const underlineImage = getBase64Image(
+        path.join(__dirname, "public/cert-assets/UnderlineKVB.png")
+      );
+      const kvbSignature = getBase64Image(
+        path.join(__dirname, "public/cert-assets/KVBSignature.png")
+      );
+      const streakSignature = getBase64Image(
+        path.join(
+          __dirname,
+          "public/cert-assets/StreakCoFounderSignatureExcellence.png"
+        )
+      );
+      const mitulMehtaSignature = getBase64Image(
+        path.join(__dirname, "public/cert-assets/MitulMehtaSignature.png")
+      );
+
+      // Replace image paths with base64 strings
+      template = template
+        .replace("{{borderImage}}", borderImage)
+        .replace("{{logoImage}}", logoImage)
+        .replace("{{kvbLogo}}", kvbLogo)
+        .replace("{{underlineImage}}", underlineImage)
+        .replace("{{kvbSignature}}", kvbSignature)
+        .replace("{{streakSignature}}", streakSignature)
+        .replace("{{mitulMehtaSignature}}", mitulMehtaSignature);
+
+      return template;
+    }
+    case 26: {
+      template = fs.readFileSync(
+        __dirname + "/html/KVBSchoolPrincipal.html",
+        "utf-8"
+      );
+
+      const logoImage = getBase64Image(
+        path.join(__dirname, "public/vector.svg")
+      );
+      const kvbLogo = getBase64Image(
+        path.join(__dirname, "public/cert-assets/KVBlogo.png")
+      );
+      const underlineImage = getBase64Image(
+        path.join(__dirname, "public/cert-assets/UnderlineKVB.png")
+      );
+      const kvbSignature = getBase64Image(
+        path.join(__dirname, "public/cert-assets/KVBSignature.png")
+      );
+      const streakSignature = getBase64Image(
+        path.join(
+          __dirname,
+          "public/cert-assets/StreakCoFounderSignatureExcellence.png"
+        )
+      );
+      const mitulMehtaSignature = getBase64Image(
+        path.join(__dirname, "public/cert-assets/MitulMehtaSignature.png")
+      );
+
+      template = template
         .replace("{{logoImage}}", logoImage)
         .replace("{{kvbLogo}}", kvbLogo)
         .replace("{{underlineImage}}", underlineImage)
@@ -2160,8 +2354,8 @@ Handlebars.registerHelper("getNameSizeClass", function (name) {
   if (nameLength > 25) {
     return "small"; // 30px
   } else if (nameLength > 15) {
-    return "medium"; // 40px (default)
+    return "small"; // 40px (default)
   } else {
-    return "medium"; // 60px
+    return "small"; // 60px
   }
 });
