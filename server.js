@@ -414,7 +414,7 @@ app.post("/api/upload-html", async (req, res) => {
     const { typeId, sessionId, singlePDF = false } = req.body;
 
     // Validate typeId
-    const validTypeIds = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26];
+    const validTypeIds = [1,2,3,4,5,6,7,8,9,10,11,12,14,15,16,17,18,19,20,21,22,23,24,25,26];
     if (!validTypeIds.includes(Number(typeId))) {
       return res.status(400).json({ error: `Invalid typeId: ${typeId}` });
     }
@@ -1084,19 +1084,36 @@ const getHtml = (typeid) => {
       );
       break;
     }
-    case 13: {
-      template = fs.readFileSync(
-        __dirname + "/html/NationalsParticipationCertificate.html",
-        "utf-8"
-      );
-      break;
-    }
     case 14: {
       template = fs.readFileSync(
         __dirname + "/html/NationalsParticipationCertificateV2.html",
         "utf-8"
       );
-      break;
+
+      const borderImage = getBase64Image(
+        path.join(__dirname, "public/cert-assets/NatParticipationV2_frame.png")
+      );
+      const logoImage = getBase64Image(
+        path.join(__dirname, "public/cert-assets/NatParticipationV2_vector-6.png")
+      );
+      const cashfreeSignature = getBase64Image(
+        path.join(__dirname, "public/cert-assets/NatParticipationV2_vector.png")
+      );
+      const streakSignature = getBase64Image(
+        path.join(__dirname, "public/cert-assets/NatParticipationV2_img.png")
+      );
+      const badgeImage = getBase64Image(
+        path.join(__dirname, "public/cert-assets/NatParticipationV2_rectangle-3.png")
+      );
+
+      template = template
+        .replace("{{borderImage}}", borderImage)
+        .replace("{{logoImage}}", logoImage)
+        .replace("{{cashfreeSignature}}", cashfreeSignature)
+        .replace("{{streakSignature}}", streakSignature)
+        .replace("{{badgeImage}}", badgeImage);
+
+      return template;
     }
     case 15: {
       template = fs.readFileSync(
@@ -1834,7 +1851,7 @@ app.post("/api/generate-school-report", async (req, res) => {
 function cleanupOldReports(directory, maxAgeHours = 24) {
   fs.readdir(directory, (err, files) => {
     if (err) {
-      console.error("Error reading reports directory:", err);
+      if (err.code !== "ENOENT") console.error("Error reading reports directory:", err);
       return;
     }
 
