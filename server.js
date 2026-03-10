@@ -1,17 +1,15 @@
 const express = require("express");
 const cors = require("cors");
-const bodyParser = require("body-parser");
 const fileUpload = require("express-fileupload");
 const Papa = require("papaparse");
 const Handlebars = require("handlebars");
 var fs = require("fs");
 const puppeteer = require("puppeteer");
 const archiver = require("archiver");
-var https = require("https");
-const cheerio = require("cheerio");
 const path = require("path");
 const cliProgress = require("cli-progress");
 const colors = require("colors");
+const crypto = require("crypto");
 
 const app = express();
 const port = process.env.PORT || 8080;
@@ -19,18 +17,31 @@ const port = process.env.PORT || 8080;
 process.setMaxListeners(20); // Increase max listeners limit
 
 app.use(express.json());
-app.use(fileUpload(), cors());
+app.use(fileUpload({ limits: { fileSize: 10 * 1024 * 1024 } }), cors()); // 10MB file size limit
 app.use(express.static("public"));
-let CSVData = [];
-const handleParseCSV = (csvString) => {
+
+// Session-based CSV storage — maps sessionId → parsed CSV rows
+const sessions = new Map();
+
+// Auto-expire sessions older than 2 hours
+setInterval(() => {
+  const cutoff = Date.now() - 2 * 60 * 60 * 1000;
+  for (const [id, session] of sessions) {
+    if (session.createdAt < cutoff) sessions.delete(id);
+  }
+}, 30 * 60 * 1000); // run every 30 minutes
+
+const parseCSV = (csvString) => {
+  let data = [];
   Papa.parse(csvString, {
     header: true,
     dynamicTyping: true,
     skipEmptyLines: true,
     complete: (result) => {
-      CSVData = result.data;
+      data = result.data;
     },
   });
+  return data;
 };
 
 const generateHTML = (data, template) => {
@@ -38,16 +49,8 @@ const generateHTML = (data, template) => {
   return compiledTemplate(data);
 };
 
-async function convertHTMLToPDF(htmlString) {
-  const browser = await puppeteer.launch({ headless: false });
-  const page = await browser.newPage();
-  await page.setContent(htmlString);
-  const pdf = await page.pdf({ format: "A4" });
-  await browser.close();
-  return pdf;
-}
 
-const generatePDF = async (html) => {
+const generatePDF = async (html, type = 20) => {
   try {
     const browser = await puppeteer.launch({
       headless: "new",
@@ -110,11 +113,14 @@ const generatePDF = async (html) => {
 };
 
 app.post("/api/upload_csv", (req, res) => {
-  const fileValue = req.files.file.data;
-  const csv = new Buffer.from(fileValue).toString();
-
-  handleParseCSV(csv);
-  res.send({ message: "received csv file" });
+  if (!req.files || !req.files.file) {
+    return res.status(400).json({ error: "No file uploaded" });
+  }
+  const csv = Buffer.from(req.files.file.data).toString();
+  const rows = parseCSV(csv);
+  const sessionId = crypto.randomUUID();
+  sessions.set(sessionId, { rows, createdAt: Date.now() });
+  res.json({ sessionId, message: "received csv file", rowCount: rows.length });
 });
 
 app.get("/", (req, res) => {
@@ -124,73 +130,42 @@ app.get("/test", (req, res) => {
   res.send("its working💪");
 });
 
+// Types that use explicit A4 format — all other types use auto-detected dimensions
+const A4_TYPES = new Set([20, 21]);
+
+// Measure the actual rendered content size in CSS pixels.
+// The page is already loaded at a 1920px-wide viewport (set before setContent),
+// so the 100%-width page-wrapper fills 1920px. We BFS through the DOM to find
+// the first element that is narrower than the viewport — that's the fixed-size
+// certificate container (e.g. 885×623px).
+async function measureContentSize(page) {
+  return await page.evaluate(() => {
+    const vw = window.innerWidth;
+    const queue = Array.from(document.body.children);
+    while (queue.length) {
+      const el = queue.shift();
+      const w = el.offsetWidth;
+      const h = el.offsetHeight;
+      // First element narrower than the full viewport is the certificate container
+      if (w > 100 && h > 100 && w < vw - 1) {
+        return { width: w, height: h };
+      }
+      queue.push(...Array.from(el.children));
+    }
+    // Fallback: scroll dimensions
+    return {
+      width: document.documentElement.scrollWidth,
+      height: document.documentElement.scrollHeight,
+    };
+  });
+}
+
+// Convert CSS pixels (96 DPI) to mm, with a small safety buffer
+const pxToMm = (px, bufferPx = 2) =>
+  `${(((px + bufferPx) * 25.4) / 96).toFixed(2)}mm`;
+
 function getPageConfig(type) {
   switch (type) {
-    case 1:
-    case 2:
-      return {
-        width: "242mm",
-        height: "160mm",
-        margin: { top: "0mm", right: "0mm", bottom: "0mm", left: "0mm" },
-      };
-    case 3:
-    case 4:
-    case 5:
-    case 6:
-    case 7:
-    case 8:
-    case 9:
-    case 10:
-    case 12:
-      return {
-        width: "175mm",
-        height: "318mm",
-        margin: { top: "0mm", right: "0mm", bottom: "0mm", left: "0mm" },
-      };
-    case 11:
-      return {
-        width: "242mm",
-        height: "174mm",
-        margin: { top: "1mm", right: "0mm", bottom: "0mm", left: "0mm" },
-      };
-    case 13:
-    case 14:
-      return {
-        width: "230mm",
-        height: "165mm",
-        margin: { top: "2mm", right: "0mm", bottom: "0mm", left: "0mm" },
-      };
-
-    case 15:
-      return {
-        width: "250mm",
-        height: "160mm",
-        margin: { top: "2mm", right: "2mm", bottom: "2mm", left: "2mm" },
-      };
-    case 16:
-      return {
-        width: "250mm",
-        height: "160mm",
-        margin: { top: "2mm", right: "2mm", bottom: "2mm", left: "2mm" },
-      };
-    case 17:
-      return {
-        width: "250mm",
-        height: "160mm",
-        margin: { top: "2mm", right: "2mm", bottom: "2mm", left: "2mm" },
-      };
-    case 18:
-      return {
-        width: "250mm",
-        height: "160mm",
-        margin: { top: "2mm", right: "2mm", bottom: "2mm", left: "2mm" },
-      };
-    case 19:
-      return {
-        width: "250mm",
-        height: "160mm",
-        margin: { top: "2mm", right: "2mm", bottom: "2mm", left: "2mm" },
-      };
     case 20:
       return {
         width: "297mm",
@@ -211,37 +186,8 @@ function getPageConfig(type) {
         landscape: false,
         preferCSSPageSize: true,
       };
-    case 22:
-      return {
-        width: "230mm",
-        height: "164.5mm",
-        margin: { top: "0mm", right: "0mm", bottom: "0mm", left: "0mm" },
-      };
-    case 23:
-      return {
-        width: "230mm",
-        height: "164.5mm",
-        margin: { top: "0mm", right: "0mm", bottom: "0mm", left: "0mm" },
-      };
-    case 24:
-      return {
-        width: "230mm",
-        height: "164.5mm",
-        margin: { top: "0mm", right: "0mm", bottom: "0mm", left: "0mm" },
-      };
-    case 25:
-      return {
-        width: "230mm",
-        height: "164.5mm",
-        margin: { top: "0mm", right: "0mm", bottom: "0mm", left: "0mm" },
-      };
-    case 26:
-      return {
-        width: "230mm",
-        height: "164.5mm",
-        margin: { top: "0mm", right: "0mm", bottom: "0mm", left: "0mm" },
-      };
     default:
+      // Should not be reached — certificate types use auto-detection
       return {
         width: "250mm",
         height: "250mm",
@@ -250,62 +196,67 @@ function getPageConfig(type) {
   }
 }
 
+// Shared browser instance — launched once, reused for all PDFs
+const BROWSER_ARGS = [
+  "--no-sandbox",
+  "--disable-setuid-sandbox",
+  "--disable-dev-shm-usage",
+  "--disable-gpu",
+  "--disable-font-subpixel-positioning",
+  "--disable-features=TranslateUI",
+  "--disable-web-security",
+  "--disable-features=VizDisplayCompositor",
+  "--memory-pressure-off",
+  "--max_old_space_size=4096",
+];
+
+let _sharedBrowser = null;
+async function getSharedBrowser() {
+  if (!_sharedBrowser || !_sharedBrowser.connected) {
+    _sharedBrowser = await puppeteer.launch({
+      headless: "new",
+      args: BROWSER_ARGS,
+      timeout: 60000,
+    });
+  }
+  return _sharedBrowser;
+}
+
 async function generatePDFWithPuppeteer(html, type) {
-  const browser = await puppeteer.launch({
-    headless: "new",
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-      "--disable-font-subpixel-positioning",
-      "--disable-features=TranslateUI",
-      "--disable-web-security",
-      "--disable-features=VizDisplayCompositor",
-      "--memory-pressure-off",
-      "--max_old_space_size=4096",
-    ],
-    timeout: 60000,
-  });
+  const browser = await getSharedBrowser();
+  const page = await browser.newPage();
 
   try {
-    const page = await browser.newPage();
-
-    // Optimized viewport for faster rendering
-    await page.setViewport({
-      width: 600,
-      height: 800,
-      deviceScaleFactor: 1.2,
-    });
-
+    // Wide viewport for certificates: the 100%-width page-wrapper fills 1920px
+    // so it won't constrain the fixed-size certificate container inside it.
+    await page.setViewport({ width: 1920, height: 1080, deviceScaleFactor: 1 });
     await page.setDefaultNavigationTimeout(60000);
     await page.setContent(html, { waitUntil: "networkidle2", timeout: 60000 });
 
-    // Streamlined font loading - reduced wait time
     await page.evaluate(() => {
       return new Promise((resolve) => {
         if (document.fonts && document.fonts.ready) {
-          document.fonts.ready.then(() => {
-            setTimeout(resolve, 1000);
-          });
+          document.fonts.ready.then(() => setTimeout(resolve, 1000));
         } else {
           setTimeout(resolve, 2000);
         }
       });
     });
 
-    const config = getPageConfig(type);
-    const pdf = await page.pdf({
-      ...config,
-      printBackground: true,
-      preferCSSPageSize: true,
-    });
-
-    return pdf;
-  } finally {
-    if (browser) {
-      await browser.close();
+    let pdfOptions;
+    if (A4_TYPES.has(type)) {
+      pdfOptions = { ...getPageConfig(type), preferCSSPageSize: type === 21 };
+    } else {
+      const { width, height } = await measureContentSize(page);
+      pdfOptions = {
+        width: pxToMm(width),
+        height: pxToMm(height),
+        margin: { top: "0", right: "0", bottom: "0", left: "0" },
+      };
     }
+    return await page.pdf({ ...pdfOptions, printBackground: true });
+  } finally {
+    await page.close(); // close the page, NOT the browser
   }
 }
 
@@ -460,11 +411,24 @@ app.post("/api/upload-html", async (req, res) => {
   const usedFilenames = new Set(); // Track used filenames to prevent duplicates
 
   try {
-    const { typeId, singlePDF = false } = req.body; // Add singlePDF option
+    const { typeId, sessionId, singlePDF = false } = req.body;
+
+    // Validate typeId
+    const validTypeIds = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26];
+    if (!validTypeIds.includes(Number(typeId))) {
+      return res.status(400).json({ error: `Invalid typeId: ${typeId}` });
+    }
+
+    // Resolve CSV data from session, with fallback to legacy global for compatibility
+    const session = sessions.get(sessionId);
+    const CSVData = session ? session.rows : [];
+    if (!CSVData.length) {
+      return res.status(400).json({ error: "No CSV data found. Please upload a CSV first." });
+    }
 
     if (singlePDF) {
       // Generate single PDF with multiple pages
-      return await generateSinglePDFWithMultiplePages(req, res, typeId);
+      return await generateSinglePDFWithMultiplePages(req, res, typeId, CSVData);
     }
 
     // FIX: Generate HTMLs for each CSV row
@@ -672,7 +636,7 @@ app.post("/api/upload-html", async (req, res) => {
 });
 
 // New function to generate single PDF with multiple pages
-async function generateSinglePDFWithMultiplePages(req, res, typeId) {
+async function generateSinglePDFWithMultiplePages(req, res, typeId, CSVData) {
   let tracker;
   try {
     console.log("\nStarting single PDF generation process...".cyan);
@@ -875,66 +839,40 @@ async function generateSinglePDFWithMultiplePages(req, res, typeId) {
   }
 }
 
-// New optimized PDF generation function for single pages
+// Optimized PDF generation for single pages — reuses shared browser
 async function generateOptimizedPDF(html, type) {
-  const browser = await puppeteer.launch({
-    headless: "new",
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-      "--disable-font-subpixel-positioning",
-      "--disable-features=TranslateUI",
-      "--disable-web-security",
-      "--disable-features=VizDisplayCompositor",
-      "--memory-pressure-off",
-      "--max_old_space_size=2048", // Reduced memory limit
-    ],
-    timeout: 30000, // Reduced timeout
-  });
+  const browser = await getSharedBrowser();
+  const page = await browser.newPage();
 
   try {
-    const page = await browser.newPage();
-
-    // Optimized viewport
-    await page.setViewport({
-      width: 400, // Smaller viewport for faster rendering
-      height: 600,
-      deviceScaleFactor: 1,
-    });
-
+    await page.setViewport({ width: 1920, height: 1080, deviceScaleFactor: 1 });
     await page.setDefaultNavigationTimeout(30000);
-    await page.setContent(html, {
-      waitUntil: "domcontentloaded", // Faster loading
-      timeout: 30000,
-    });
+    await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 30000 });
 
-    // Minimal font loading wait
     await page.evaluate(() => {
       return new Promise((resolve) => {
         if (document.fonts && document.fonts.ready) {
-          document.fonts.ready.then(() => {
-            setTimeout(resolve, 500); // Reduced wait time
-          });
+          document.fonts.ready.then(() => setTimeout(resolve, 500));
         } else {
           setTimeout(resolve, 1000);
         }
       });
     });
 
-    const config = getPageConfig(type);
-    const pdf = await page.pdf({
-      ...config,
-      printBackground: true,
-      preferCSSPageSize: true,
-    });
-
-    return pdf;
-  } finally {
-    if (browser) {
-      await browser.close();
+    let pdfOptions;
+    if (A4_TYPES.has(type)) {
+      pdfOptions = { ...getPageConfig(type), preferCSSPageSize: type === 21 };
+    } else {
+      const { width, height } = await measureContentSize(page);
+      pdfOptions = {
+        width: pxToMm(width),
+        height: pxToMm(height),
+        margin: { top: "0", right: "0", bottom: "0", left: "0" },
+      };
     }
+    return await page.pdf({ ...pdfOptions, printBackground: true });
+  } finally {
+    await page.close(); // close the page, NOT the browser
   }
 }
 
@@ -977,8 +915,13 @@ async function mergePDFBuffers(pdfBuffers) {
 
 app.post("/api/generate-single-pdf", async (req, res) => {
   try {
-    const { typeId } = req.body;
-    await generateSinglePDFWithMultiplePages(req, res, typeId);
+    const { typeId, sessionId } = req.body;
+    const session = sessions.get(sessionId);
+    const csvData = session ? session.rows : [];
+    if (!csvData.length) {
+      return res.status(400).json({ error: "No CSV data found. Please upload a CSV first." });
+    }
+    await generateSinglePDFWithMultiplePages(req, res, typeId, csvData);
   } catch (error) {
     console.error("Error in single PDF generation:", error);
     res.status(500).json({
@@ -1820,8 +1763,8 @@ app.post("/api/generate-school-report", async (req, res) => {
         const compiledTemplate = Handlebars.compile(template);
         const html = compiledTemplate(transformedData);
 
-        // Generate PDF
-        const pdf = await generatePDFWithPuppeteer(html, schoolData.type);
+        // Generate PDF (typeId 20 = SchoolReportNew, A4 landscape)
+        const pdf = await generatePDFWithPuppeteer(html, schoolData.type || 20);
 
         // Create sanitized filename
         const sanitizedSchoolName = schoolData.schoolName
@@ -1832,17 +1775,15 @@ app.post("/api/generate-school-report", async (req, res) => {
         const fileName = `${sanitizedSchoolName}_report.pdf`;
         const filePath = path.join(batchDir, fileName);
 
-        // Save PDF
+        // Save PDF to disk (for batch; single will be streamed below)
         fs.writeFileSync(filePath, pdf);
-
-        // Save relative path for response
-        const relativePath = path.relative(__dirname, filePath);
 
         reports.push({
           schoolName: schoolData.schoolName,
           fileName: fileName,
-          filePath: relativePath,
+          filePath: path.relative(__dirname, filePath),
           status: "success",
+          pdf, // kept in memory only for single-school streaming
         });
       } catch (error) {
         console.error(
@@ -1857,7 +1798,18 @@ app.post("/api/generate-school-report", async (req, res) => {
       }
     }
 
-    // Send response with folder information
+    // Single school request — stream PDF directly back to client
+    if (!Array.isArray(schoolsData.response)) {
+      const result = reports[0];
+      if (result.status === "error") {
+        return res.status(500).json({ status: "error", error: result.error });
+      }
+      res.contentType("application/pdf");
+      res.attachment(result.fileName);
+      return res.send(result.pdf);
+    }
+
+    // Batch request — return JSON summary
     res.json({
       status: "success",
       message: "Reports generated successfully",
@@ -1866,7 +1818,7 @@ app.post("/api/generate-school-report", async (req, res) => {
         time: timeStamp,
         path: path.relative(__dirname, batchDir),
       },
-      reports: reports,
+      reports: reports.map(({ pdf: _pdf, ...rest }) => rest), // strip pdf buffers from JSON
     });
   } catch (error) {
     console.error("Error in report generation:", error);
@@ -1947,17 +1899,6 @@ Handlebars.registerHelper(
 );
 
 // Add this function to check if fonts are loaded
-const areFontsLoaded = async (page) => {
-  return await page.evaluate(() => {
-    return Promise.all([
-      document.fonts.check('12px "Ogg Text-Medium"'),
-      document.fonts.check('12px "Ogg Text-Book"'),
-      document.fonts.check('12px "Ogg Text-Light"'),
-      document.fonts.check('12px "Ogg Text-Bold"'),
-    ]).then((results) => results.every((result) => result));
-  });
-};
-
 // Add this helper before compiling the template
 Handlebars.registerHelper("paginate", function (array, pageSize) {
   let pages = [];
@@ -2217,8 +2158,8 @@ const generateSchoolReports = async (schoolsData) => {
         html
       );
 
-      // Generate PDF
-      const pdf = await generatePDF(html);
+      // Generate PDF (typeId 20 = SchoolReportNew, A4 landscape)
+      const pdf = await generatePDF(html, 20);
 
       if (!pdf || !Buffer.isBuffer(pdf)) {
         throw new Error("PDF generation produced invalid output");

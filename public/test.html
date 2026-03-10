@@ -73,6 +73,7 @@
 
     <script>
         let csvUploaded = false;
+        let sessionId = null;
 
         // Helper function to get the API base URL
         function getApiBaseUrl() {
@@ -103,9 +104,10 @@
                 });
                 
                 const result = await response.json();
+                sessionId = result.sessionId;
                 csvUploaded = true;
                 updateButtons();
-                updateResult(`✅ CSV Upload: ${result.message}`, 'success');
+                updateResult(`✅ CSV Upload: ${result.message} (${result.rowCount} rows)`, 'success');
             } catch (error) {
                 updateResult(`❌ Error uploading CSV: ${error.message}`, 'error');
             }
@@ -128,9 +130,9 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ typeId })
+                    body: JSON.stringify({ typeId, sessionId })
                 });
-                
+
                 if (response.ok) {
                     const blob = await response.blob();
                     const url = window.URL.createObjectURL(blob);
@@ -172,7 +174,7 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ typeId, singlePDF: false })
+                    body: JSON.stringify({ typeId, sessionId, singlePDF: false })
                 });
                 
                 if (response.ok) {
