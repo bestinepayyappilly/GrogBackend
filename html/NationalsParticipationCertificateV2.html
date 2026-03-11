@@ -17,6 +17,11 @@
             justify-content: center;
         }
 
+        .cert-padding {
+            padding:6px 4px 4px 4px;
+            line-height: 0;
+        }
+
         .certificate-container {
             width: 824px;
             height: 583px;
@@ -46,11 +51,11 @@
             left: 0;
             right: 0;
             font-family: 'Cardo', serif;
-            font-weight: 700;
+            font-weight: 600;
             color: #2c6ab1;
             font-size: 45px;
             text-align: center;
-            line-height: 34.5px;
+            line-height: 36.5px;
         }
 
         .certify-text {
@@ -69,7 +74,7 @@
 
         .student-name {
             position: absolute;
-            top: 310px;
+            top: 260px;
             left: 0;
             right: 0;
             font-family: 'Cardo', serif;
@@ -83,7 +88,7 @@
 
         .school-info {
             position: absolute;
-            top: 408px;
+            top: 358px;
             left: 0;
             right: 0;
             font-family: 'Cardo', serif;
@@ -98,7 +103,7 @@
 
         .rank-info {
             position: absolute;
-            top: 436px;
+            top: 386px;
             left: 0;
             right: 0;
             margin: 0;
@@ -113,7 +118,7 @@
 
         .exam-date {
             position: absolute;
-            top: 462px;
+            top: 412px;
             left: 0;
             right: 0;
             margin: 0;
@@ -126,69 +131,44 @@
             white-space: nowrap;
         }
 
-        .signature-left {
+        .signatures-section {
             position: absolute;
-            width: 61px;
-            height: 34px;
-            top: 440px;
-            left: 110px;
-            object-fit: contain;
+            top: 475px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            justify-content: space-around;
+            align-items: flex-start;
         }
 
-        .signature-right {
-            position: absolute;
-            width: 95px;
-            height: 36px;
-            top: 440px;
-            left: 663px;
-            object-fit: contain;
+        .sig-block {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
         }
 
-        .sig-name-left {
-            position: absolute;
-            top: 485px;
-            left: 104px;
+        .sig-image {
+            width: 100px;
+            height: 50px;
+            object-fit: cover;
+        }
+
+        .sig-name {
             font-family: 'Cardo', serif;
             font-weight: 700;
             color: #000000;
-            font-size: 13.8px;
-            line-height: 18.8px;
+            font-size: 13px;
+            line-height: 17px;
             white-space: nowrap;
         }
 
-        .sig-title-left {
-            position: absolute;
-            top: 505px;
-            left: 76px;
+        .sig-title {
             font-family: 'Cardo', serif;
             font-weight: 400;
             color: #000000;
-            font-size: 13.8px;
-            line-height: 18.8px;
-            white-space: nowrap;
-        }
-
-        .sig-name-right {
-            position: absolute;
-            top: 484px;
-            left: 670px;
-            font-family: 'Cardo', serif;
-            font-weight: 700;
-            color: #000000;
-            font-size: 13.8px;
-            line-height: 18.8px;
-            white-space: nowrap;
-        }
-
-        .sig-title-right {
-            position: absolute;
-            top: 505px;
-            left: 651px;
-            font-family: 'Cardo', serif;
-            font-weight: 400;
-            color: #000000;
-            font-size: 13.8px;
-            line-height: 18.8px;
+            font-size: 11.5px;
+            line-height: 15px;
             white-space: nowrap;
         }
 
@@ -215,6 +195,7 @@
 </head>
 <body>
     <div class="page-wrapper">
+        <div class="cert-padding">
         <div class="certificate-container">
             <img class="frame" src="{{borderImage}}" alt=""/>
             <img class="logo" src="{{logoImage}}" alt="NFO Logo"/>
@@ -227,17 +208,33 @@
 
             <div class="school-info">of grade {{class}} from {{school}}</div>
 
-            <p class="rank-info">achieved {{rank}} in the National Level of the</p>
+            <p class="rank-info">achieved All India Rank {{rank}} in the National level (Level II) of the </p>
 
             <p class="exam-date">National Finance Olympiad held on {{date}}</p>
 
-            <img class="signature-left" src="{{cashfreeSignature}}" alt="Cashfree Signature"/>
-            <div class="sig-name-left">Reeju Datta</div>
-            <div class="sig-title-left">Co-founder, Cashfree</div>
-
-            <img class="signature-right" src="{{streakSignature}}" alt="Streak Signature"/>
-            <div class="sig-name-right">Shiv Bidani</div>
-            <div class="sig-title-right">Co-founder, Streak</div>
+            <div class="signatures-section">
+                <div class="sig-block">
+                    <img class="sig-image" src="{{cashfreeSignature}}" alt=""/>
+                    <div class="sig-name">Reeju Datta</div>
+                    <div class="sig-title">Co-founder, Cashfree</div>
+                </div>
+                <div class="sig-block">
+                    <img class="sig-image" src="{{kvbSignature}}" alt=""/>
+                    <div class="sig-name">Sankarshan Basu</div>
+                    <div class="sig-title">Professor, IIM Bangalore</div>
+                </div>
+                <div class="sig-block">
+                    <img class="sig-image" src="{{streakSignature}}" alt=""/>
+                    <div class="sig-name">Shiv Bidani</div>
+                    <div class="sig-title">Co-founder, NFO</div>
+                </div>
+                <div class="sig-block">
+                    <img class="sig-image" src="{{mitulMehtaSignature}}" alt=""/>
+                    <div class="sig-name">Mitul Mehta</div>
+                    <div class="sig-title">Co-founder, NFO</div>
+                </div>
+            </div>
+        </div>
         </div>
     </div>
 </body>

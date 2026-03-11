@@ -1099,8 +1099,14 @@ const getHtml = (typeid) => {
       const cashfreeSignature = getBase64Image(
         path.join(__dirname, "public/cert-assets/NatParticipationV2_vector.png")
       );
+      const kvbSignature = getBase64Image(
+        path.join(__dirname, "public/cert-assets/KVBSignature.png")
+      );
       const streakSignature = getBase64Image(
-        path.join(__dirname, "public/cert-assets/NatParticipationV2_img.png")
+        path.join(__dirname, "public/cert-assets/StreakCoFounderSignatureExcellence.png")
+      );
+      const mitulMehtaSignature = getBase64Image(
+        path.join(__dirname, "public/cert-assets/MitulMehtaSignature.png")
       );
       const badgeImage = getBase64Image(
         path.join(__dirname, "public/cert-assets/NatParticipationV2_rectangle-3.png")
@@ -1110,7 +1116,9 @@ const getHtml = (typeid) => {
         .replace("{{borderImage}}", borderImage)
         .replace("{{logoImage}}", logoImage)
         .replace("{{cashfreeSignature}}", cashfreeSignature)
+        .replace("{{kvbSignature}}", kvbSignature)
         .replace("{{streakSignature}}", streakSignature)
+        .replace("{{mitulMehtaSignature}}", mitulMehtaSignature)
         .replace("{{badgeImage}}", badgeImage);
 
       return template;
