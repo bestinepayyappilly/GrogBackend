@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>School Registration Form – NFO 2026-27</title>
+  <style>
+    @font-face {
+      font-family: "Ogg Text-Book";
+      src: url("{{oggTextBook}}") format("truetype");
+      font-weight: normal;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    @font-face {
+      font-family: "Ogg Text-Bold";
+      src: url("{{oggTextBold}}") format("truetype");
+      font-weight: normal;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+    }
+
+    @page {
+      size: A4 portrait;
+      margin: 0;
+    }
+
+    .page-wrapper {
+      width: 100%;
+      height: 297mm;
+      background-color: #F1FAFD;
+      overflow: hidden;
+    }
+
+    .page {
+      background-color: #F1FAFD;
+      width: 100%;
+      height: 297mm;
+      position: relative;
+      padding: 22px 56px 24px 56px;
+      font-family: "Ogg Text-Book", Georgia, serif;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 20px;
+      flex-shrink: 0;
+    }
+
+    .header-title h1 {
+      font-size: 30px;
+      font-family: "Ogg Text-Bold", Georgia, serif;
+      color: #235288;
+      letter-spacing: 0.01em;
+      margin: 0;
+    }
+
+    .header-title p {
+      font-size: 20px;
+      font-family: "Ogg Text-Book", Georgia, serif;
+      color: #235288;
+      margin: 4px 0 0 0;
+    }
+
+    /* ── Form ── */
+    .form-body {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      justify-content: space-between;
+    }
+
+    .form-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+    }
+
+    .form-row.split {
+      gap: 20px;
+    }
+
+    .field {
+      display: flex;
+      align-items: flex-end;
+      flex: 1;
+      gap: 6px;
+    }
+
+    .field label {
+      font-size: 15px;
+      color: #235288;
+      white-space: nowrap;
+      font-family: "Ogg Text-Book", Georgia, serif;
+      padding-bottom: 3px;
+      flex-shrink: 0;
+    }
+
+    .field .underline {
+      flex: 1;
+      border-bottom: 1.5px solid #21559466;
+      background: transparent;
+      min-height: 22px;
+      font-size: 15px;
+      color: #235288;
+      font-family: "Ogg Text-Book", Georgia, serif;
+      min-width: 0;
+      word-break: break-word;
+      white-space: normal;
+      line-height: 1.4;
+      padding-bottom: 3px;
+    }
+
+    /* School name row allows wrapping */
+    .form-row.school-name-row {
+      align-items: flex-start;
+    }
+
+    .form-row.school-name-row .field label {
+      padding-top: 2px;
+    }
+
+    /* ── Checkboxes ── */
+
+    .checkbox-inline-layout {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+    }
+
+    .cb-label {
+      font-size: 15px;
+      color: #235288;
+      font-family: "Ogg Text-Book", Georgia, serif;
+      flex-shrink: 0;
+      padding-top: 2px;
+    }
+
+    .checkbox-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .checkbox-row {
+      display: flex;
+      gap: 28px;
+    }
+
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .checkbox-item input[type="checkbox"] {
+      width: 17px;
+      height: 17px;
+      accent-color: #235288;
+      flex-shrink: 0;
+      cursor: pointer;
+      margin: 0;
+    }
+
+    .checkbox-item span {
+      font-size: 15px;
+      color: #235288;
+      font-family: "Ogg Text-Book", Georgia, serif;
+    }
+
+    /* ── Footer Note ── */
+    .footer-note {
+      font-size: 11px;
+      color: #235288;
+      font-family: "Ogg Text-Book", Georgia, serif;
+      line-height: 1.6;
+      margin-top: 6px;
+      flex-shrink: 0;
+    }
+
+    .footer-note strong {
+      font-weight: bold;
+    }
+
+    /* ── Page Number ── */
+    .page-number {
+      display: block;
+      text-align: right;
+      margin-top: 8px;
+      font-size: 13px;
+      color: #235288;
+      font-family: "Ogg Text-Book", Georgia, serif;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="page-wrapper">
+    <div class="page">
+
+      <!-- Header -->
+      <div class="header">
+        <div class="header-title">
+          <h1>School Registration Form</h1>
+          <p>NFO 2026-27</p>
+        </div>
+        <img src="{{logoImage}}" width="76" alt="NFO Logo" />
+      </div>
+
+      <!-- Form Fields -->
+      <div class="form-body">
+
+        <div class="form-row school-name-row{{#if longSchoolName}} long-name{{/if}}">
+          <div class="field">
+            <label>School Name:</label>
+            <div class="underline">{{schoolName}}</div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label>School Address:</label>
+            <div class="underline">{{schoolAddress}}</div>
+          </div>
+        </div>
+
+        <div class="form-row split">
+          <div class="field" style="flex: 1.1;">
+            <label>City:</label>
+            <div class="underline">{{city}}</div>
+          </div>
+          <div class="field" style="flex: 1;">
+            <label>State:</label>
+            <div class="underline">{{state}}</div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label>Pincode:</label>
+            <div class="underline">{{pincode}}</div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label>School Phone Number:</label>
+            <div class="underline">{{schoolPhone}}</div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label>School E-mail:</label>
+            <div class="underline">{{schoolEmail}}</div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label>Principal Name:</label>
+            <div class="underline">{{principalName}}</div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label>Principal Phone Number:</label>
+            <div class="underline">{{principalPhone}}</div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label>Principal E-mail:</label>
+            <div class="underline">{{principalEmail}}</div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label>Co-ordinator's Name:</label>
+            <div class="underline">{{coordinatorName}}</div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label>Co-ordinator's Phone Number:</label>
+            <div class="underline">{{coordinatorPhone}}</div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label>Co-ordinator's E-mail:</label>
+            <div class="underline">{{coordinatorEmail}}</div>
+          </div>
+        </div>
+
+        <!-- Checkboxes -->
+        <div class="checkbox-section">
+          <div class="checkbox-inline-layout">
+          <span class="cb-label">Tentative Month to conduct the Olympiad:</span>
+          <div class="checkbox-group">
+            <div class="checkbox-row">
+              <label class="checkbox-item">
+                <input type="checkbox" name="month" value="june" {{#if monthJune}}checked{{/if}} />
+                <span>June</span>
+              </label>
+              <label class="checkbox-item">
+                <input type="checkbox" name="month" value="july" {{#if monthJuly}}checked{{/if}} />
+                <span>July</span>
+              </label>
+              <label class="checkbox-item">
+                <input type="checkbox" name="month" value="aug" {{#if monthAug}}checked{{/if}} />
+                <span>Aug.</span>
+              </label>
+            </div>
+            <div class="checkbox-row">
+              <label class="checkbox-item">
+                <input type="checkbox" name="month" value="sept" {{#if monthSept}}checked{{/if}} />
+                <span>Sept.</span>
+              </label>
+              <label class="checkbox-item">
+                <input type="checkbox" name="month" value="oct" {{#if monthOct}}checked{{/if}} />
+                <span>Oct.</span>
+              </label>
+              <label class="checkbox-item">
+                <input type="checkbox" name="month" value="nov" {{#if monthNov}}checked{{/if}} />
+                <span>Nov.</span>
+              </label>
+            </div>
+          </div>
+          </div>
+        </div>
+
+        <!-- Signature -->
+        <div class="form-row">
+          <div class="field">
+            <label>Principal/Co-ordinating Teacher Signature:</label>
+            <div class="underline">{{signature}}</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Footer Note -->
+      <p class="footer-note">
+        Note: Please share the scanned copy of the filled form with the NFO Team to initiate the onboarding process for
+        your institution. Our email: <strong>partnerships@nationalfinanceolympiad.com</strong>.<br/>
+        For any queries, feel free to reach out to our team.
+      </p>
+
+      <!-- Page Number -->
+      <p class="page-number">10</p>
+
+    </div>
+  </div>
+</body>
+</html>

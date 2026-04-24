@@ -10,6 +10,124 @@ const path = require("path");
 const cliProgress = require("cli-progress");
 const colors = require("colors");
 const crypto = require("crypto");
+const { google } = require("googleapis");
+const { Readable } = require("stream");
+
+// ─── Google Drive / Sheets integration ───────────────────────────────────────
+const GOOGLE_SERVICE_ACCOUNT_KEY = path.join(
+  __dirname,
+  "secrets/streakcardstoragegcloud-1f460b4dab2b.json",
+);
+const DRIVE_FOLDER_ID = "0AD8hq11D9Q9-Uk9PVA";
+const SPREADSHEET_ID = "1PuFLa3AiwIsKoURqDuDrFOw3rwcYSQmgoHdVTcsNn0Y";
+
+function getGoogleAuth() {
+  return new google.auth.GoogleAuth({
+    keyFile: GOOGLE_SERVICE_ACCOUNT_KEY,
+    scopes: [
+      "https://www.googleapis.com/auth/drive",
+      "https://www.googleapis.com/auth/spreadsheets",
+    ],
+  });
+}
+
+async function uploadPdfToDrive(pdfBuffer, fileName) {
+  const sizekb = (pdfBuffer.byteLength / 1024).toFixed(1);
+  console.log(`  [Drive] Uploading "${fileName}" (${sizekb} KB)...`);
+
+  const auth = getGoogleAuth();
+  const drive = google.drive({ version: "v3", auth });
+
+  const stream = Readable.from(Buffer.from(pdfBuffer));
+  const createRes = await drive.files.create({
+    requestBody: {
+      name: fileName,
+      parents: [DRIVE_FOLDER_ID],
+      mimeType: "application/pdf",
+    },
+    media: { mimeType: "application/pdf", body: stream },
+    fields: "id",
+    supportsAllDrives: true,
+  });
+
+  const fileId = createRes.data.id;
+  console.log(`  [Drive] File created → id: ${fileId}`);
+
+  console.log(`  [Drive] Setting public read permission for ${fileId}...`);
+  await drive.permissions.create({
+    fileId,
+    requestBody: { role: "reader", type: "anyone" },
+    supportsAllDrives: true,
+  });
+
+  const link = `https://drive.google.com/file/d/${fileId}/view`;
+  console.log(`  [Drive] ✓ Done: ${link}`);
+  return link;
+}
+
+// Converts a 0-based column index to a spreadsheet letter (0 → A, 25 → Z, 26 → AA …)
+function colIndexToLetter(idx) {
+  let letter = "";
+  let n = idx + 1;
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    letter = String.fromCharCode(65 + rem) + letter;
+    n = Math.floor((n - 1) / 26);
+  }
+  return letter;
+}
+
+// links: [{ rowIndex: <0-based CSV row>, driveLink: <url> }]
+async function writeDriveLinksToSheet(links) {
+  console.log(`  [Sheets] Connecting to spreadsheet ${SPREADSHEET_ID}...`);
+  const auth = getGoogleAuth();
+  const sheets = google.sheets({ version: "v4", auth });
+
+  // Identify the first sheet/tab name
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
+  const sheetName = meta.data.sheets[0].properties.title;
+  console.log(`  [Sheets] Using tab: "${sheetName}"`);
+
+  // Read existing header row to find or create the "Certificate Link" column
+  console.log(`  [Sheets] Reading header row...`);
+  const headerRes = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetName}!1:1`,
+  });
+  const headers = headerRes.data.values?.[0] || [];
+  console.log(`  [Sheets] Found ${headers.length} existing column(s): [${headers.join(", ")}]`);
+
+  let linkColIdx = headers.indexOf("Certificate Link");
+  if (linkColIdx === -1) {
+    linkColIdx = headers.length;
+    const col = colIndexToLetter(linkColIdx);
+    console.log(`  [Sheets] "Certificate Link" column not found — creating it at column ${col}...`);
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${sheetName}!${col}1`,
+      valueInputOption: "RAW",
+      requestBody: { values: [["Certificate Link"]] },
+    });
+    console.log(`  [Sheets] Header created at ${col}1`);
+  } else {
+    console.log(`  [Sheets] "Certificate Link" column already exists at ${colIndexToLetter(linkColIdx)}1`);
+  }
+
+  const col = colIndexToLetter(linkColIdx);
+  // Sheet row = CSV rowIndex + 2  (row 1 = headers, rows 2+ = data)
+  const data = links.map(({ rowIndex, driveLink }) => ({
+    range: `${sheetName}!${col}${rowIndex + 2}`,
+    values: [[driveLink]],
+  }));
+
+  console.log(`  [Sheets] Writing ${data.length} link(s) in batch to column ${col}...`);
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId: SPREADSHEET_ID,
+    requestBody: { valueInputOption: "RAW", data },
+  });
+  console.log(`  [Sheets] ✓ Batch write complete.`);
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 const app = express();
 const port = process.env.PORT || 8080;
@@ -24,12 +142,15 @@ app.use(express.static("public"));
 const sessions = new Map();
 
 // Auto-expire sessions older than 2 hours
-setInterval(() => {
-  const cutoff = Date.now() - 2 * 60 * 60 * 1000;
-  for (const [id, session] of sessions) {
-    if (session.createdAt < cutoff) sessions.delete(id);
-  }
-}, 30 * 60 * 1000); // run every 30 minutes
+setInterval(
+  () => {
+    const cutoff = Date.now() - 2 * 60 * 60 * 1000;
+    for (const [id, session] of sessions) {
+      if (session.createdAt < cutoff) sessions.delete(id);
+    }
+  },
+  30 * 60 * 1000,
+); // run every 30 minutes
 
 const parseCSV = (csvString) => {
   let data = [];
@@ -48,7 +169,6 @@ const generateHTML = (data, template) => {
   const compiledTemplate = Handlebars.compile(template);
   return compiledTemplate(data);
 };
-
 
 const generatePDF = async (html, type = 20) => {
   try {
@@ -119,7 +239,8 @@ app.post("/api/upload_csv", (req, res) => {
   const csv = Buffer.from(req.files.file.data).toString();
   const rows = parseCSV(csv);
   const sessionId = crypto.randomUUID();
-  sessions.set(sessionId, { rows, createdAt: Date.now() });
+  const originalName = req.files.file.name || "certificates";
+  sessions.set(sessionId, { rows, createdAt: Date.now(), originalName });
   res.json({ sessionId, message: "received csv file", rowCount: rows.length });
 });
 
@@ -131,38 +252,8 @@ app.get("/test", (req, res) => {
 });
 
 // Types that use explicit A4 format — all other types use auto-detected dimensions
-const A4_TYPES = new Set([20, 21]);
+const A4_TYPES = new Set([20, 21, 30]);
 
-// Measure the actual rendered content size in CSS pixels.
-// The page is already loaded at a 1920px-wide viewport (set before setContent),
-// so the 100%-width page-wrapper fills 1920px. We BFS through the DOM to find
-// the first element that is narrower than the viewport — that's the fixed-size
-// certificate container (e.g. 885×623px).
-async function measureContentSize(page) {
-  return await page.evaluate(() => {
-    const vw = window.innerWidth;
-    const queue = Array.from(document.body.children);
-    while (queue.length) {
-      const el = queue.shift();
-      const w = el.offsetWidth;
-      const h = el.offsetHeight;
-      // First element narrower than the full viewport is the certificate container
-      if (w > 100 && h > 100 && w < vw - 1) {
-        return { width: w, height: h };
-      }
-      queue.push(...Array.from(el.children));
-    }
-    // Fallback: scroll dimensions
-    return {
-      width: document.documentElement.scrollWidth,
-      height: document.documentElement.scrollHeight,
-    };
-  });
-}
-
-// Convert CSS pixels (96 DPI) to mm, with a small safety buffer
-const pxToMm = (px, bufferPx = 2) =>
-  `${(((px + bufferPx) * 25.4) / 96).toFixed(2)}mm`;
 
 function getPageConfig(type) {
   switch (type) {
@@ -177,6 +268,16 @@ function getPageConfig(type) {
         landscape: true,
       };
     case 21:
+      return {
+        format: "A4",
+        width: "210mm",
+        height: "297mm",
+        margin: { top: "0mm", right: "0mm", bottom: "0mm", left: "0mm" },
+        printBackground: true,
+        landscape: false,
+        preferCSSPageSize: true,
+      };
+    case 30:
       return {
         format: "A4",
         width: "210mm",
@@ -222,14 +323,52 @@ async function getSharedBrowser() {
   return _sharedBrowser;
 }
 
+// Post-processes a Puppeteer-generated PDF to add real AcroForm checkbox widgets.
+// Puppeteer renders <input type="checkbox"> as static pixels; this replaces them
+// with interactive pdf-lib fields at the exact positions captured via evaluate().
+async function addInteractiveCheckboxesToPdf(pdfBytes, checkboxInfo, viewportWidth, viewportHeight) {
+  const { PDFDocument } = require("pdf-lib");
+
+  // A4 in PDF points (1pt = 1/72 inch; 210mm × 297mm)
+  const A4_W = 595.28;
+  const A4_H = 841.89;
+  const sx = A4_W / viewportWidth;
+  const sy = A4_H / viewportHeight;
+
+  const pdfDoc = await PDFDocument.load(pdfBytes);
+  const form = pdfDoc.getForm();
+  const page = pdfDoc.getPage(0);
+
+  for (const cb of checkboxInfo) {
+    // Convert CSS (top-left origin, Y down) → PDF (bottom-left origin, Y up)
+    const x = cb.x * sx;
+    const y = A4_H - (cb.y + cb.height) * sy;
+    const w = cb.width * sx;
+    const h = cb.height * sy;
+
+    try {
+      const checkbox = form.createCheckBox(cb.name);
+      checkbox.addToPage(page, { x, y, width: w, height: h });
+      if (cb.checked) checkbox.check();
+    } catch (err) {
+      console.error(`[pdf-lib] Failed to add checkbox "${cb.name}":`, err.message);
+    }
+  }
+
+  return await pdfDoc.save();
+}
+
 async function generatePDFWithPuppeteer(html, type) {
   const browser = await getSharedBrowser();
   const page = await browser.newPage();
 
   try {
-    // Wide viewport for certificates: the 100%-width page-wrapper fills 1920px
-    // so it won't constrain the fixed-size certificate container inside it.
-    await page.setViewport({ width: 1920, height: 1080, deviceScaleFactor: 1 });
+    // A4 portrait forms (type 30): A4 at 96 CSS dpi = 794×1122px.
+    // 595px viewport only covers ~446pt of the 595pt-wide A4 page, leaving
+    // white edges. 794px maps exactly to 210mm so the page fills edge-to-edge.
+    const viewportWidth  = type === 30 ? 794  : 1920;
+    const viewportHeight = type === 30 ? 1122 : 1080; // A4 at 96dpi = 297mm = 1122px
+    await page.setViewport({ width: viewportWidth, height: viewportHeight, deviceScaleFactor: 1 });
     await page.setDefaultNavigationTimeout(60000);
     await page.setContent(html, { waitUntil: "networkidle2", timeout: 60000 });
 
@@ -243,18 +382,54 @@ async function generatePDFWithPuppeteer(html, type) {
       });
     });
 
+    // For type 30: capture checkbox positions then hide the static HTML inputs
+    // so the pdf-lib AcroForm widgets (added after PDF generation) are the only
+    // visible and interactive checkboxes in the final PDF.
+    let checkboxInfo = null;
+    if (type === 30) {
+      checkboxInfo = await page.evaluate(() => {
+        const inputs = Array.from(document.querySelectorAll('input[type="checkbox"]'));
+        const info = inputs.map((input, i) => {
+          const rect = input.getBoundingClientRect();
+          return {
+            name: `month_${input.value || i}`,
+            x: rect.left,
+            y: rect.top,
+            width: rect.width,
+            height: rect.height,
+            checked: input.checked,
+          };
+        });
+        // Hide the statically rendered checkboxes so pdf-lib widgets are the
+        // sole source of truth for appearance and interactivity.
+        inputs.forEach((input) => { input.style.opacity = "0"; });
+        return info;
+      });
+    }
+
     let pdfOptions;
     if (A4_TYPES.has(type)) {
       pdfOptions = { ...getPageConfig(type), preferCSSPageSize: type === 21 };
     } else {
-      const { width, height } = await measureContentSize(page);
       pdfOptions = {
-        width: pxToMm(width),
-        height: pxToMm(height),
+        format: "A4",
+        landscape: true,
         margin: { top: "0", right: "0", bottom: "0", left: "0" },
       };
     }
-    return await page.pdf({ ...pdfOptions, printBackground: true });
+
+    let pdfBytes = await page.pdf({ ...pdfOptions, printBackground: true });
+
+    if (type === 30 && checkboxInfo && checkboxInfo.length > 0) {
+      pdfBytes = await addInteractiveCheckboxesToPdf(
+        pdfBytes,
+        checkboxInfo,
+        viewportWidth,
+        viewportHeight,
+      );
+    }
+
+    return pdfBytes;
   } finally {
     await page.close(); // close the page, NOT the browser
   }
@@ -263,25 +438,39 @@ async function generatePDFWithPuppeteer(html, type) {
 // Helper function to process PDFs in batches with parallel processing
 async function processPDFBatch(pdfData, typeId, startIdx, batchSize) {
   const batch = pdfData.slice(startIdx, startIdx + batchSize);
+  const CONCURRENCY = 3; // Process 3 PDFs at a time
 
-  // Process PDFs in parallel within the batch
-  const promises = batch.map(async (item) => {
-    try {
-      // Use row-specific typeId if available, otherwise use the default typeId
-      const rowTypeId = item.typeId || typeId;
-      const buffer = await generatePDFWithPuppeteer(item.html, rowTypeId);
-      return { buffer, index: item.index, success: true, typeId: rowTypeId };
-    } catch (error) {
-      console.error(
-        `Error generating PDF for index ${item.index}:`,
-        error.message
-      );
-      return { index: item.index, success: false, error: error.message };
-    }
-  });
-
-  // Wait for all PDFs in the batch to complete
-  const results = await Promise.all(promises);
+  const results = [];
+  for (let i = 0; i < batch.length; i += CONCURRENCY) {
+    const chunk = batch.slice(i, i + CONCURRENCY);
+    const chunkResults = await Promise.all(
+      chunk.map(async (item) => {
+        try {
+          const rowTypeId = item.typeId || typeId;
+          const buffer = await generatePDFWithPuppeteer(item.html, rowTypeId);
+          return {
+            buffer,
+            index: item.index,
+            success: true,
+            typeId: rowTypeId,
+          };
+        } catch (error) {
+          console.error(
+            `Error generating PDF for index ${item.index}:`,
+            error.message,
+          );
+          if (
+            error.message.includes("Connection closed") ||
+            error.message.includes("Protocol error")
+          ) {
+            _sharedBrowser = null;
+          }
+          return { index: item.index, success: false, error: error.message };
+        }
+      }),
+    );
+    results.push(...chunkResults);
+  }
   return results;
 }
 
@@ -369,7 +558,7 @@ class ProcessTracker {
         this.processedItems > 0
           ? this.formatTime(
               (this.totalItems - this.processedItems) /
-                (this.processedItems / elapsedTime)
+                (this.processedItems / elapsedTime),
             )
           : "calculating...",
       duration: this.formatTime(elapsedTime),
@@ -411,10 +600,18 @@ app.post("/api/upload-html", async (req, res) => {
   const usedFilenames = new Set(); // Track used filenames to prevent duplicates
 
   try {
-    const { typeId, sessionId, singlePDF = false } = req.body;
+    const {
+      typeId,
+      sessionId,
+      singlePDF = false,
+      registrationType = "individual",
+    } = req.body;
 
     // Validate typeId
-    const validTypeIds = [1,2,3,4,5,6,7,8,9,10,11,12,14,15,16,17,18,19,20,21,22,23,24,25,26];
+    const validTypeIds = [
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+      23, 24, 25, 26, 27, 28, 29, 30,
+    ];
     if (!validTypeIds.includes(Number(typeId))) {
       return res.status(400).json({ error: `Invalid typeId: ${typeId}` });
     }
@@ -422,17 +619,106 @@ app.post("/api/upload-html", async (req, res) => {
     // Resolve CSV data from session, with fallback to legacy global for compatibility
     const session = sessions.get(sessionId);
     const CSVData = session ? session.rows : [];
+    const csvBaseName = session?.originalName
+      ? path.basename(session.originalName, path.extname(session.originalName))
+      : "certificates";
     if (!CSVData.length) {
-      return res.status(400).json({ error: "No CSV data found. Please upload a CSV first." });
+      return res
+        .status(400)
+        .json({ error: "No CSV data found. Please upload a CSV first." });
     }
 
     if (singlePDF) {
       // Generate single PDF with multiple pages
-      return await generateSinglePDFWithMultiplePages(req, res, typeId, CSVData);
+      return await generateSinglePDFWithMultiplePages(
+        req,
+        res,
+        typeId,
+        CSVData,
+      );
     }
 
     // FIX: Generate HTMLs for each CSV row
     // For KVB certificates (typeId 22 or 23), determine template based on airRank
+
+    // typeId 29: Teachers & Principal Auto — expands each row into 1 or 2 PDF entries
+    if (typeId === 29) {
+      const teacherPrincipalEntries = [];
+      CSVData.forEach((row, idx) => {
+        const teacherTemplate = getHtml(18);
+        teacherPrincipalEntries.push({
+          html: generateHTML(row, teacherTemplate),
+          index: teacherPrincipalEntries.length,
+          typeId: 18,
+          personName: (row["coordinator"] || row["Teacher name"] || "").trim(),
+          csvIndex: idx,
+        });
+        const principalName = (row["name"] || row["Principal name"] || "").trim();
+        if (principalName) {
+          const principalTemplate = getHtml(19);
+          teacherPrincipalEntries.push({
+            html: generateHTML(row, principalTemplate),
+            index: teacherPrincipalEntries.length,
+            typeId: 19,
+            personName: principalName,
+            csvIndex: idx,
+          });
+        }
+      });
+      errorLog.totalAttempted = teacherPrincipalEntries.length;
+      console.log("\nStarting PDF generation process...".cyan);
+      tracker = new ProcessTracker(teacherPrincipalEntries.length);
+      if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+      const oldFiles = fs.readdirSync(tempDir);
+      for (const file of oldFiles) fs.unlinkSync(`${tempDir}/${file}`);
+      const zipArchive = archiver("zip", { zlib: { level: 9 } });
+      zipArchive.on("error", (err) => { throw err; });
+      res.contentType("application/zip");
+      res.setHeader("Content-Disposition", `attachment; filename="${csvBaseName}_certificates.zip"`);
+      zipArchive.pipe(res);
+      res.on("finish", () => {
+        const files = fs.existsSync(tempDir) ? fs.readdirSync(tempDir) : [];
+        for (const file of files) fs.unlinkSync(`${tempDir}/${file}`);
+        if (fs.existsSync(tempDir)) fs.rmdirSync(tempDir);
+      });
+      const BATCH_SIZE = 15;
+      for (let i = 0; i < teacherPrincipalEntries.length; i += BATCH_SIZE) {
+        const batchResults = await processPDFBatch(teacherPrincipalEntries, 29, i, BATCH_SIZE);
+        for (const result of batchResults) {
+          tracker.update();
+          if (result.success) {
+            errorLog.successCount++;
+            const entry = teacherPrincipalEntries[result.index];
+            const rawName = entry.personName || `pdf_${String(result.index).padStart(4, "0")}`;
+            let fileName = rawName.trim().replace(/[^a-zA-Z0-9\s]/g, "").replace(/\s+/g, "_").toUpperCase();
+            let finalFileName = fileName;
+            let counter = 1;
+            while (usedFilenames.has(finalFileName)) { finalFileName = `${fileName}_dup${counter}`; counter++; }
+            usedFilenames.add(finalFileName);
+            const schoolRaw = (CSVData[entry.csvIndex]["school"] || CSVData[entry.csvIndex]["School Name"] || "Unknown_School").trim();
+            const schoolFolder = schoolRaw.replace(/[^a-zA-Z0-9\s,.-]/g, "").trim();
+            const pdfFilename = `${tempDir}/${finalFileName}.pdf`;
+            await fs.promises.writeFile(pdfFilename, result.buffer);
+            zipArchive.file(pdfFilename, { name: `${schoolFolder}/${finalFileName}.pdf` });
+          } else {
+            errorLog.failureCount++;
+            const entry = teacherPrincipalEntries[result.index];
+            errorLog.failedPDFs.push({ name: entry.personName || `Unknown_${result.index}`, error: result.error });
+          }
+        }
+        if (global.gc) global.gc();
+      }
+      tracker.stop();
+      console.log("\nGeneration Complete!".green);
+      console.log(`Successfully generated: ${errorLog.successCount}`.green);
+      if (errorLog.failureCount > 0) {
+        console.log(`Failed to generate: ${errorLog.failureCount}`.red);
+        errorLog.failedPDFs.forEach((f, i) => console.log(`  ${i + 1}. ${f.name} — ${f.error}`.red));
+      }
+      await zipArchive.finalize();
+      return;
+    }
+
     const pdfData = CSVData.map((row, idx) => {
       let rowTypeId = typeId;
       let mappedRow = row;
@@ -440,16 +726,54 @@ app.post("/api/upload-html", async (req, res) => {
       // For KVB certificates, determine typeId based on airRank
       if (typeId === 22 || typeId === 23) {
         const airRank = parseInt(
-          row["airRank"] || row["rank"] || row["AirRank"] || "999"
+          row["airRank"] || row["rank"] || row["AirRank"] || "999",
         );
         // If airRank <= 10, use Outstanding certificate (23), otherwise use Participation (22)
         rowTypeId = airRank <= 10 ? 23 : 22;
       } else if (typeId === 24 || typeId === 25) {
         const airRank = parseInt(
-          row["airRank"] || row["rank"] || row["AirRank"] || "999"
+          row["airRank"] || row["rank"] || row["AirRank"] || "999",
         );
         // If airRank <= 10, use Outstanding IR certificate (25), otherwise use Participation IR (24)
         rowTypeId = airRank <= 10 ? 25 : 24;
+      } else if (typeId === 27) {
+        // NFO Nationals Auto: rank 1-3 → Outstanding (17), rank 4-100 → Excellence (16), rank 101+ → Participation (14)
+        const rank = parseInt(
+          row["Rank"] || row["nationalRank"] || row["rank"] || "999",
+        );
+        if (rank >= 1 && rank <= 3) {
+          rowTypeId = 17;
+        } else if (rank <= 100) {
+          rowTypeId = 16;
+        } else {
+          rowTypeId = 14;
+        }
+      } else if (typeId === 28) {
+        // Level 1 Auto: rank 1-3 → Achievement/Outstanding (2), rank 4+ → Participation (1)
+        const rank = parseInt(
+          row["rank"] || row["Rank"] || row["schoolRank"] || "999",
+        );
+        rowTypeId = rank >= 1 && rank <= 3 ? 2 : 1;
+      }
+
+      // Normalize NFO Nationals CSV columns (School_name → school, Rank → nationalRank/rank, grade → class)
+      if ([16, 17, 27].includes(typeId)) {
+        mappedRow = { ...row };
+        if (!mappedRow.school && mappedRow.School_name)
+          mappedRow.school = mappedRow.School_name;
+        if (!mappedRow.nationalRank && mappedRow.Rank)
+          mappedRow.nationalRank = mappedRow.Rank;
+        // Also map for Participation template (typeId 14): uses {{rank}}, {{class}}, {{date}}
+        if (!mappedRow.rank && mappedRow.Rank) mappedRow.rank = mappedRow.Rank;
+        if (!mappedRow.class && mappedRow.grade)
+          mappedRow.class = mappedRow.grade;
+        if (!mappedRow.date) mappedRow.date = "7th February 2026";
+      }
+
+      // Format date for school-level certificates (typeId 1, 2, 28)
+      if ([1, 2, 28].includes(typeId)) {
+        mappedRow = { ...mappedRow };
+        if (mappedRow.date) mappedRow.date = formatDate(mappedRow.date);
       }
 
       // Get the appropriate template for this row
@@ -463,10 +787,70 @@ app.post("/api/upload-html", async (req, res) => {
             row["first_name"] || row["First Name"] || row["first_name"], // Support multiple column name formats
           // Add font data for NFO Invite (same as school reports)
           oggTextBook: getBase64Font(
-            path.join(__dirname, "public/fonts/OggText-Book.ttf")
+            path.join(__dirname, "public/fonts/OggText-Book.ttf"),
           ),
           oggTextBold: getBase64Font(
-            path.join(__dirname, "public/fonts/OggText-Bold.ttf")
+            path.join(__dirname, "public/fonts/OggText-Bold.ttf"),
+          ),
+        };
+      }
+
+      // School Registration Form (typeId 30)
+      if (typeId === 30) {
+        const truthy = new Set(["true", "1", "yes", "y", "checked"]);
+        const asBool = (v) =>
+          typeof v === "boolean"
+            ? v
+            : truthy.has(String(v || "").trim().toLowerCase());
+
+        const getValue = (...keys) => {
+          for (const key of keys) {
+            if (row[key] !== undefined && row[key] !== null) {
+              return row[key];
+            }
+          }
+          return "";
+        };
+
+        const normalizedLocation = normalizeRegistrationLocation(
+          getValue("city", "City"),
+          getValue("state", "State"),
+        );
+
+        const resolvedSchoolName = getValue("schoolName", "School Name");
+        mappedRow = {
+          schoolName: resolvedSchoolName,
+          longSchoolName: resolvedSchoolName.length > 40,
+          schoolAddress: getValue("schoolAddress", "School Address"),
+          city: normalizedLocation.city,
+          state: normalizedLocation.state,
+          pincode: getValue("pincode", "Pincode"),
+          schoolPhone: getValue("schoolPhone", "School Phone Number"),
+          schoolEmail: getValue("schoolEmail", "School E-mail"),
+          principalName: getValue("principalName", "Principal Name"),
+          principalPhone: getValue("principalPhone", "Principal Phone Number"),
+          principalEmail: getValue("principalEmail", "Principal E-mail"),
+          coordinatorName: getValue("coordinatorName", "Co-ordinator Name"),
+          coordinatorPhone: getValue(
+            "coordinatorPhone",
+            "Co-ordinator Phone Number",
+          ),
+          coordinatorEmail: getValue(
+            "coordinatorEmail",
+            "Co-ordinator E-mail",
+          ),
+          monthJune: asBool(getValue("monthJune", "monthJune")),
+          monthJuly: asBool(getValue("monthJuly", "monthJuly")),
+          monthAug: asBool(getValue("monthAug", "monthAug")),
+          monthSept: asBool(getValue("monthSept", "monthSept")),
+          monthOct: asBool(getValue("monthOct", "monthOct")),
+          monthNov: asBool(getValue("monthNov", "monthNov")),
+          signature: getValue("signature", "signature"),
+          oggTextBook: getBase64Font(
+            path.join(__dirname, "public/fonts/OggText-Book.ttf"),
+          ),
+          oggTextBold: getBase64Font(
+            path.join(__dirname, "public/fonts/OggText-Bold.ttf"),
           ),
         };
       }
@@ -504,7 +888,7 @@ app.post("/api/upload-html", async (req, res) => {
 
     // Set up response and cleanup after response is finished
     res.contentType("application/zip");
-    res.attachment("pdfs.zip");
+    res.attachment(`${csvBaseName}.zip`);
 
     // Handle cleanup after response is complete
     res.on("finish", () => {
@@ -532,15 +916,17 @@ app.post("/api/upload-html", async (req, res) => {
     zipArchive.pipe(res);
 
     // Process PDFs in larger batches for better performance
-    const BATCH_SIZE = 25; // Increased from 10 to 25
+    const BATCH_SIZE = 15;
     const allResults = [];
+    // Collects Drive upload jobs for typeId 30 (processed after zip is built)
+    const driveUploads = [];
 
     for (let i = 0; i < pdfData.length; i += BATCH_SIZE) {
       const batchResults = await processPDFBatch(
         pdfData,
         typeId,
         i,
-        BATCH_SIZE
+        BATCH_SIZE,
       );
       allResults.push(...batchResults);
 
@@ -566,11 +952,34 @@ app.post("/api/upload-html", async (req, res) => {
             const fullName = `${firstName} ${lastName}`.trim();
             fileName = generateSafeFilename(
               fullName || "customer",
-              result.index
+              result.index,
             );
+          } else if (typeId === 18) {
+            // Teachers certificate — use coordinator name
+            const personName =
+              CSVData[result.index]["coordinator"] ||
+              CSVData[result.index]["Teacher name"] ||
+              "";
+            fileName = generateSafeFilename(personName || "teacher", result.index);
+          } else if (typeId === 19) {
+            // Principal certificate — use name field
+            const personName =
+              CSVData[result.index]["name"] ||
+              CSVData[result.index]["Principal name"] ||
+              "";
+            fileName = generateSafeFilename(personName || "principal", result.index);
+          } else if (typeId === 30) {
+            // School Registration Form — use school name
+            const schoolName =
+              CSVData[result.index]["schoolName"] ||
+              CSVData[result.index]["School Name"] ||
+              "";
+            fileName = generateSafeFilename(schoolName || "school_form", result.index);
           } else {
             // Use existing logic for other templates with index fallback
-            const username = CSVData[result.index].student_username;
+            const username =
+              CSVData[result.index].username ||
+              CSVData[result.index].student_username;
             fileName = username
               ? `${username}`
               : `pdf_${String(result.index).padStart(4, "0")}`;
@@ -587,7 +996,22 @@ app.post("/api/upload-html", async (req, res) => {
 
           const pdfFilename = `${tempDir}/${finalFileName}.pdf`;
           await fs.promises.writeFile(pdfFilename, result.buffer);
-          zipArchive.file(pdfFilename, { name: `${finalFileName}.pdf` });
+          const schoolCode =
+            registrationType === "school"
+              ? (CSVData[result.index]["School_code"] || "unknown") + "/"
+              : "";
+          zipArchive.file(pdfFilename, {
+            name: `${schoolCode}${finalFileName}.pdf`,
+          });
+
+          // Queue Drive upload for School Registration Forms
+          if (typeId === 30) {
+            driveUploads.push({
+              rowIndex: result.index,
+              buffer: result.buffer,
+              fileName: `${finalFileName}.pdf`,
+            });
+          }
         } else {
           errorLog.failureCount++;
           errorLog.failedPDFs.push({
@@ -615,6 +1039,39 @@ app.post("/api/upload-html", async (req, res) => {
     console.log(`Successfully generated: ${errorLog.successCount}`.green);
     if (errorLog.failureCount > 0) {
       console.log(`Failed to generate: ${errorLog.failureCount}`.red);
+      errorLog.failedPDFs.forEach((f, i) => console.log(`  ${i + 1}. ${f.name} — ${f.error}`.red));
+    }
+
+    // Upload School Registration Form PDFs to Drive and write links to sheet
+    if (typeId === 30 && driveUploads.length > 0) {
+      console.log(`\n${"─".repeat(60)}`.cyan);
+      console.log(`[Drive] Starting upload of ${driveUploads.length} form(s)...`.cyan);
+      console.log(`[Drive] Target folder: https://drive.google.com/drive/folders/${DRIVE_FOLDER_ID}`.cyan);
+      const driveStart = Date.now();
+      try {
+        let uploaded = 0;
+        const driveLinks = await Promise.all(
+          driveUploads.map(async (item) => {
+            const link = await uploadPdfToDrive(item.buffer, item.fileName);
+            uploaded++;
+            console.log(`[Drive] Progress: ${uploaded}/${driveUploads.length}`.cyan);
+            return { rowIndex: item.rowIndex, driveLink: link };
+          }),
+        );
+        const driveElapsed = ((Date.now() - driveStart) / 1000).toFixed(1);
+        console.log(`[Drive] ✓ All ${driveLinks.length} file(s) uploaded in ${driveElapsed}s`.green);
+
+        console.log(`\n[Sheets] Writing links to spreadsheet...`.cyan);
+        const sheetsStart = Date.now();
+        await writeDriveLinksToSheet(driveLinks);
+        const sheetsElapsed = ((Date.now() - sheetsStart) / 1000).toFixed(1);
+        console.log(`[Sheets] ✓ ${driveLinks.length} link(s) written in ${sheetsElapsed}s`.green);
+        console.log(`${"─".repeat(60)}\n`.cyan);
+      } catch (driveErr) {
+        console.error(`[Drive/Sheets] ✗ Error (PDFs still generated OK):`.red, driveErr.message);
+        console.error(`[Drive/Sheets] Stack:`.red, driveErr.stack);
+        console.log(`${"─".repeat(60)}\n`.cyan);
+      }
     }
 
     // Finalize zip archive
@@ -664,7 +1121,7 @@ async function generateSinglePDFWithMultiplePages(req, res, typeId, CSVData) {
     });
 
     console.log(
-      `📝 Sorted ${sortedCSVData.length} records alphabetically by name`.yellow
+      `📝 Sorted ${sortedCSVData.length} records alphabetically by name`.yellow,
     );
 
     // Generate HTML for each sorted CSV row
@@ -675,16 +1132,22 @@ async function generateSinglePDFWithMultiplePages(req, res, typeId, CSVData) {
       // For KVB certificates, determine typeId based on airRank
       if (typeId === 22 || typeId === 23) {
         const airRank = parseInt(
-          row["airRank"] || row["rank"] || row["AirRank"] || "999"
+          row["airRank"] || row["rank"] || row["AirRank"] || "999",
         );
         // If airRank <= 10, use Outstanding certificate (23), otherwise use Participation (22)
         rowTypeId = airRank <= 10 ? 23 : 22;
       } else if (typeId === 24 || typeId === 25) {
         const airRank = parseInt(
-          row["airRank"] || row["rank"] || row["AirRank"] || "999"
+          row["airRank"] || row["rank"] || row["AirRank"] || "999",
         );
         // If airRank <= 10, use Outstanding IR certificate (25), otherwise use Participation IR (24)
         rowTypeId = airRank <= 10 ? 25 : 24;
+      } else if (typeId === 28) {
+        // Level 1 Auto: rank 1-3 → Achievement/Outstanding (2), rank 4+ → Participation (1)
+        const rank = parseInt(
+          row["rank"] || row["Rank"] || row["schoolRank"] || "999",
+        );
+        rowTypeId = rank >= 1 && rank <= 3 ? 2 : 1;
       }
 
       // Get the appropriate template for this row
@@ -696,10 +1159,10 @@ async function generateSinglePDFWithMultiplePages(req, res, typeId, CSVData) {
           customerName:
             row["first_name"] || row["First Name"] || row["first_name"], // Support multiple column name formats
           oggTextBook: getBase64Font(
-            path.join(__dirname, "public/fonts/OggText-Book.ttf")
+            path.join(__dirname, "public/fonts/OggText-Book.ttf"),
           ),
           oggTextBold: getBase64Font(
-            path.join(__dirname, "public/fonts/OggText-Bold.ttf")
+            path.join(__dirname, "public/fonts/OggText-Bold.ttf"),
           ),
         };
       }
@@ -713,10 +1176,10 @@ async function generateSinglePDFWithMultiplePages(req, res, typeId, CSVData) {
     });
 
     console.log(
-      `📄 Generated ${htmlPages.length} HTML pages for processing`.yellow
+      `📄 Generated ${htmlPages.length} HTML pages for processing`.yellow,
     );
     console.log(
-      `🔧 Using optimized approach: Generate individual PDFs then merge`.cyan
+      `🔧 Using optimized approach: Generate individual PDFs then merge`.cyan,
     );
 
     // Initialize progress tracker
@@ -745,7 +1208,7 @@ async function generateSinglePDFWithMultiplePages(req, res, typeId, CSVData) {
           tracker.updateStatus(
             `Processing ${fullName || `page ${actualIndex + 1}`} (${
               actualIndex + 1
-            }/${htmlPages.length})...`
+            }/${htmlPages.length})...`,
           );
 
           // Generate individual PDF with optimized settings
@@ -765,7 +1228,7 @@ async function generateSinglePDFWithMultiplePages(req, res, typeId, CSVData) {
             `Error generating PDF for ${
               fullName || `page ${actualIndex + 1}`
             }:`,
-            error.message
+            error.message,
           );
           tracker.update();
           return {
@@ -798,13 +1261,13 @@ async function generateSinglePDFWithMultiplePages(req, res, typeId, CSVData) {
 
     tracker.updateStatus("Merging PDFs into single document...");
     console.log(
-      `🔗 Merging ${pdfBuffers.length} PDF pages into single document...`.cyan
+      `🔗 Merging ${pdfBuffers.length} PDF pages into single document...`.cyan,
     );
 
     // Extract just the buffers for merging (already in alphabetical order)
     const sortedBuffers = pdfBuffers.map((item) => item.buffer);
     console.log(
-      `📊 Processing ${pdfBuffers.length} PDFs in alphabetical order:`.cyan
+      `📊 Processing ${pdfBuffers.length} PDFs in alphabetical order:`.cyan,
     );
     pdfBuffers.slice(0, 5).forEach((item, i) => {
       console.log(`  ${i + 1}. ${item.name || "Unknown"}`.gray);
@@ -820,17 +1283,15 @@ async function generateSinglePDFWithMultiplePages(req, res, typeId, CSVData) {
     console.log(`✅ PDF merging completed successfully!`.green);
 
     // Set response headers for PDF download
-    const fileName =
-      typeId === 21 ? "nfo_invites_combined.pdf" : "combined_documents.pdf";
     res.contentType("application/pdf");
-    res.attachment(fileName);
+    res.attachment(`${csvBaseName}.pdf`);
 
     // Send the PDF
     res.send(mergedPDF);
 
     console.log(
       `✅ Successfully generated single PDF with ${pdfBuffers.length} pages in alphabetical order`
-        .green
+        .green,
     );
   } catch (error) {
     if (tracker) tracker.stop();
@@ -847,7 +1308,10 @@ async function generateOptimizedPDF(html, type) {
   try {
     await page.setViewport({ width: 1920, height: 1080, deviceScaleFactor: 1 });
     await page.setDefaultNavigationTimeout(30000);
-    await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.setContent(html, {
+      waitUntil: "domcontentloaded",
+      timeout: 30000,
+    });
 
     await page.evaluate(() => {
       return new Promise((resolve) => {
@@ -863,10 +1327,9 @@ async function generateOptimizedPDF(html, type) {
     if (A4_TYPES.has(type)) {
       pdfOptions = { ...getPageConfig(type), preferCSSPageSize: type === 21 };
     } else {
-      const { width, height } = await measureContentSize(page);
       pdfOptions = {
-        width: pxToMm(width),
-        height: pxToMm(height),
+        format: "A4",
+        landscape: true,
         margin: { top: "0", right: "0", bottom: "0", left: "0" },
       };
     }
@@ -919,7 +1382,9 @@ app.post("/api/generate-single-pdf", async (req, res) => {
     const session = sessions.get(sessionId);
     const csvData = session ? session.rows : [];
     if (!csvData.length) {
-      return res.status(400).json({ error: "No CSV data found. Please upload a CSV first." });
+      return res
+        .status(400)
+        .json({ error: "No CSV data found. Please upload a CSV first." });
     }
     await generateSinglePDFWithMultiplePages(req, res, typeId, csvData);
   } catch (error) {
@@ -948,6 +1413,201 @@ const setupRequiredDirectories = () => {
       fs.mkdirSync(dir, { recursive: true });
     }
   });
+};
+
+// Format ISO date (2025-11-17) → "17th November 2025"
+const formatDate = (dateStr) => {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (isNaN(d)) return dateStr; // return as-is if not a valid ISO date
+  const day = d.getUTCDate();
+  const suffixes = ["th","st","nd","rd"];
+  const v = day % 100;
+  const suffix = suffixes[(v - 20) % 10] || suffixes[v] || suffixes[0];
+  const month = d.toLocaleString("en-GB", { month: "long", timeZone: "UTC" });
+  const year = d.getUTCFullYear();
+  return `${day}${suffix} ${month} ${year}`;
+};
+
+// Standardize city/state values for School Registration form PDFs.
+// Canonical values are derived from the current SchoolRegistration CSV and
+// supplemented with alias cleanup for frequent spelling/format variations.
+const REGISTRATION_STATE_CANONICAL = [
+  "ANDHRA PRADESH",
+  "ASSAM",
+  "CHANDIGARH",
+  "DELHI",
+  "GOA",
+  "GUJARAT",
+  "HARYANA",
+  "JAMMU & KASHMIR",
+  "KARNATAKA",
+  "KERALA",
+  "MADHYA PRADESH",
+  "MAHARASHTRA",
+  "PONDICHERRY",
+  "PUNJAB",
+  "RAJASTHAN",
+  "TAMIL NADU",
+  "TELANGANA",
+  "UTTAR PRADESH",
+  "UTTARAKHAND",
+  "WEST BENGAL",
+];
+
+const REGISTRATION_STATE_ALIAS = {
+  "U P": "UTTAR PRADESH",
+  "U.P": "UTTAR PRADESH",
+  "UP": "UTTAR PRADESH",
+  "U P.": "UTTAR PRADESH",
+  "NEW DELHI": "DELHI",
+  "TAMILNADU": "TAMIL NADU",
+  "THE NILGIRIS TAMILNADU": "TAMIL NADU",
+  TAMIL: "TAMIL NADU",
+  "KARNATARA": "KARNATAKA",
+  "KARNATAKA.": "KARNATAKA",
+  TELENGANA: "TELANGANA",
+  "VADODARA GUJARAT": "GUJARAT",
+};
+
+const REGISTRATION_CITY_CANONICAL = [
+  "AGRA",
+  "AHMEDABAD",
+  "AKKALKOT",
+  "BANGALORE",
+  "BENGALURU",
+  "BHOPAL",
+  "CHANDIGARH",
+  "CHENNAI",
+  "CHHIBRAMAU, KANNAUJ",
+  "COIMBATORE",
+  "DEHRADUN",
+  "DELHI",
+  "DONDAICHA",
+  "DURGAPUR",
+  "ERODE",
+  "FIROZABAD",
+  "GANDHINAGAR",
+  "GHAZIABAD",
+  "GREATER NOIDA WEST",
+  "GUNTUR",
+  "GUWAHATI",
+  "GURUGRAM",
+  "HANUMAKONDA",
+  "HISAR",
+  "HOWRAH",
+  "HYDERABAD",
+  "JAIPUR",
+  "JAMMU",
+  "JORHAT",
+  "KUNDAI",
+  "KUPWAD (SANGLI)",
+  "LAKHIMPUR-KHERI",
+  "LUCKNOW",
+  "LUDHIANA",
+  "MUMBAI",
+  "MUSSOORIE",
+  "NANDURA",
+  "NAVI MUMBAI",
+  "NEW DELHI",
+  "NOIDA",
+  "OOTY",
+  "PALAKKAD",
+  "PANCHGANI",
+  "PANIPAT",
+  "PONDICHERRY",
+  "PUNE",
+  "SALEM",
+  "SANGLI",
+  "SATNA",
+  "SILIGURI",
+  "SOLAPUR",
+  "SURAT",
+  "TANUKU",
+  "TENALI",
+  "THOOTHUKUDI",
+  "TIRUPPUR",
+  "TIRUPUR",
+  "TUMAKURU",
+  "VADODARA",
+  "VASCO DA GAMA",
+  "VISAKHAPATNAM",
+  "WARKADO",
+  "YAVATMAL",
+];
+
+const REGISTRATION_CITY_ALIAS = {
+  "PUNE 411068": "PUNE",
+  "PUNE 14": "PUNE",
+  "HYDRABAD 500016": "HYDERABAD",
+  "GIANDHINAGAR": "GANDHINAGAR",
+  "BANGALORE.": "BANGALORE",
+};
+
+const normalizeComparable = (value) =>
+  String(value || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9&]+/g, " ")
+    .trim();
+
+const levenshteinDistance = (a, b) => {
+  const m = a.length;
+  const n = b.length;
+  if (!m) return n;
+  if (!n) return m;
+
+  const dp = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[i][j] = Math.min(
+        dp[i - 1][j] + 1,
+        dp[i][j - 1] + 1,
+        dp[i - 1][j - 1] + cost,
+      );
+    }
+  }
+  return dp[m][n];
+};
+
+const fuzzyCanonical = (value, canonicalList) => {
+  const normalized = normalizeComparable(value);
+  if (!normalized) return "";
+
+  let best = "";
+  let bestDistance = Number.MAX_SAFE_INTEGER;
+  for (const candidate of canonicalList) {
+    const distance = levenshteinDistance(normalized, candidate);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = candidate;
+    }
+  }
+
+  // Accept fuzzy match only when reasonably close.
+  const threshold = Math.max(2, Math.floor(normalized.length * 0.2));
+  return bestDistance <= threshold ? best : normalized;
+};
+
+const normalizeRegistrationLocation = (city, state) => {
+  const cityNormalized = normalizeComparable(city);
+  const stateNormalized = normalizeComparable(state);
+
+  const canonicalState =
+    REGISTRATION_STATE_ALIAS[stateNormalized] ||
+    fuzzyCanonical(stateNormalized, REGISTRATION_STATE_CANONICAL);
+
+  const canonicalCity =
+    REGISTRATION_CITY_ALIAS[cityNormalized] ||
+    fuzzyCanonical(cityNormalized, REGISTRATION_CITY_CANONICAL);
+
+  return {
+    city: canonicalCity,
+    state: canonicalState,
+  };
 };
 
 // Modified getBase64Image and getBase64Font functions with error handling
@@ -1000,22 +1660,39 @@ const getBase64Font = (filepath) => {
   }
 };
 
+// Cache for templates that require image injection — built once, reused for every row
+const templateCache = {};
+
+const buildTemplate1 = () => {
+  let t = fs.readFileSync(__dirname + "/html/ParticipationCertificate.html", "utf-8");
+  return t
+    .replace("{{logoImage}}", getBase64Image(path.join(__dirname, "public/cert-assets/vector.png")))
+    .replace("{{cashfreeSignature}}", getBase64Image(path.join(__dirname, "public/cert-assets/ReejuDutta_NatParticipationV2.png")))
+    .replace("{{sankarshanBasuSignature}}", getBase64Image(path.join(__dirname, "public/cert-assets/SankarshanBasu_ParticipationV2.png")))
+    .replace("{{streakSignature}}", getBase64Image(path.join(__dirname, "public/cert-assets/ShivBidani_NatParticipationV2.png")))
+    .replace("{{mitulMehtaSignature}}", getBase64Image(path.join(__dirname, "public/cert-assets/MitulMehta_ParticipationV2.png")));
+};
+
+const buildTemplate2 = () => {
+  let t = fs.readFileSync(__dirname + "/html/OutstandingCerificate.html", "utf-8");
+  return t
+    .replace("{{logoImage}}", getBase64Image(path.join(__dirname, "public/cert-assets/vector.png")))
+    .replace("{{cashfreeSignature}}", getBase64Image(path.join(__dirname, "public/cert-assets/CashFreeFounderOutstanding.png")))
+    .replace("{{sankarshanBasuSignature}}", getBase64Image(path.join(__dirname, "public/cert-assets/SankarshanBasuOutstandingPerformance.png")))
+    .replace("{{streakSignature}}", getBase64Image(path.join(__dirname, "public/cert-assets/StreakCoFounderSignatureOutstanding.png")))
+    .replace("{{mitulMehtaSignature}}", getBase64Image(path.join(__dirname, "public/cert-assets/MitulMehtaOutstandingPerformance.png")));
+};
+
 const getHtml = (typeid) => {
   let template;
   switch (typeid) {
     case 1: {
-      template = fs.readFileSync(
-        __dirname + "/html/ParticipationCertificate.html",
-        "utf-8"
-      );
-      break;
+      if (!templateCache[1]) templateCache[1] = buildTemplate1();
+      return templateCache[1];
     }
     case 2: {
-      template = fs.readFileSync(
-        __dirname + "/html/OutstandingCerificate.html",
-        "utf-8"
-      );
-      break;
+      if (!templateCache[2]) templateCache[2] = buildTemplate2();
+      return templateCache[2];
     }
     case 3: {
       template = fs.readFileSync(__dirname + "/html/ReportsWTax.html", "utf-8");
@@ -1024,129 +1701,137 @@ const getHtml = (typeid) => {
     case 4: {
       template = fs.readFileSync(
         __dirname + "/html/ReportsWOTax.html",
-        "utf-8"
+        "utf-8",
       );
       break;
     }
     case 5: {
       template = fs.readFileSync(
         __dirname + "/html/ReportsWTaxV1.html",
-        "utf-8"
+        "utf-8",
       );
       break;
     }
     case 6: {
       template = fs.readFileSync(
         __dirname + "/html/ReportsWOTaxV1.html",
-        "utf-8"
+        "utf-8",
       );
       break;
     }
     case 7: {
       template = fs.readFileSync(
         __dirname + "/html/ReportsWTaxV2.html",
-        "utf-8"
+        "utf-8",
       );
       break;
     }
     case 8: {
       template = fs.readFileSync(
         __dirname + "/html/ReportsWOTaxV2.html",
-        "utf-8"
+        "utf-8",
       );
       break;
     }
     case 9: {
       template = fs.readFileSync(
         __dirname + "/html/ReportsWTaxV3.html",
-        "utf-8"
+        "utf-8",
       );
       break;
     }
     case 10: {
       template = fs.readFileSync(
         __dirname + "/html/ReportsWOTaxV3.html",
-        "utf-8"
+        "utf-8",
       );
       break;
     }
     case 11: {
       template = fs.readFileSync(
         __dirname + "/html/OutstandingCertificateNationals.html",
-        "utf-8"
+        "utf-8",
       );
       break;
     }
     case 12: {
       template = fs.readFileSync(
         __dirname + "/html/ReportsNationals.html",
-        "utf-8"
+        "utf-8",
       );
       break;
     }
     case 14: {
       template = fs.readFileSync(
         __dirname + "/html/NationalsParticipationCertificateV2.html",
-        "utf-8"
+        "utf-8",
       );
 
       const borderImage = getBase64Image(
-        path.join(__dirname, "public/cert-assets/NatParticipationV2_frame.png")
+        path.join(__dirname, "public/cert-assets/NatParticipationV2_frame.png"),
       );
       const logoImage = getBase64Image(
-        path.join(__dirname, "public/cert-assets/NatParticipationV2_vector-6.png")
+        path.join(__dirname, "public/cert-assets/vector.png"),
       );
       const cashfreeSignature = getBase64Image(
-        path.join(__dirname, "public/cert-assets/NatParticipationV2_vector.png")
+        path.join(
+          __dirname,
+          "public/cert-assets/ReejuDutta_NatParticipationV2.png",
+        ),
       );
-      const kvbSignature = getBase64Image(
-        path.join(__dirname, "public/cert-assets/KVBSignature.png")
+      const sankarshanBasuSignature = getBase64Image(
+        path.join(
+          __dirname,
+          "public/cert-assets/SankarshanBasu_ParticipationV2.png",
+        ),
       );
       const streakSignature = getBase64Image(
-        path.join(__dirname, "public/cert-assets/StreakCoFounderSignatureExcellence.png")
+        path.join(
+          __dirname,
+          "public/cert-assets/ShivBidani_NatParticipationV2.png",
+        ),
       );
       const mitulMehtaSignature = getBase64Image(
-        path.join(__dirname, "public/cert-assets/MitulMehtaSignature.png")
-      );
-      const badgeImage = getBase64Image(
-        path.join(__dirname, "public/cert-assets/NatParticipationV2_rectangle-3.png")
+        path.join(
+          __dirname,
+          "public/cert-assets/MitulMehta_ParticipationV2.png",
+        ),
       );
 
       template = template
         .replace("{{borderImage}}", borderImage)
         .replace("{{logoImage}}", logoImage)
         .replace("{{cashfreeSignature}}", cashfreeSignature)
-        .replace("{{kvbSignature}}", kvbSignature)
+        .replace("{{sankarshanBasuSignature}}", sankarshanBasuSignature)
         .replace("{{streakSignature}}", streakSignature)
-        .replace("{{mitulMehtaSignature}}", mitulMehtaSignature)
-        .replace("{{badgeImage}}", badgeImage);
+        .replace("{{mitulMehtaSignature}}", mitulMehtaSignature);
 
       return template;
     }
     case 15: {
       template = fs.readFileSync(
         __dirname + "/html/ZonalCertificate.html",
-        "utf-8"
+        "utf-8",
       );
 
       // Get base64 strings for all images
       const borderImage = getBase64Image(
         path.join(
           __dirname,
-          "public/cert-assets/NationalsZonalCertificateBorder.png"
-        )
+          "public/cert-assets/NationalsZonalCertificateBorder.png",
+        ),
       );
       const logoImage = getBase64Image(
-        path.join(__dirname, "public/cert-assets/vector.png")
+        path.join(__dirname, "public/cert-assets/vector.png"),
       );
       const cashfreeSignature = getBase64Image(
-        path.join(__dirname, "public/cert-assets/CashfreeFounderZonal.png")
+        path.join(__dirname, "public/cert-assets/CashfreeFounderZonal.png"),
       );
       const streakSignature = getBase64Image(
         path.join(
           __dirname,
-          "public/cert-assets/StreakCoFounderSignatureZonal.png"
-        )
+          "public/cert-assets/StreakCoFounderSignatureZonal.png",
+        ),
       );
 
       // Replace image paths with base64 strings
@@ -1161,27 +1846,36 @@ const getHtml = (typeid) => {
     case 16: {
       template = fs.readFileSync(
         __dirname + "/html/Nationals2024_25ExcellenceCertificate.html",
-        "utf-8"
+        "utf-8",
       );
 
       // Get base64 strings for all images
       const borderImage = getBase64Image(
         path.join(
           __dirname,
-          "public/cert-assets/NationalsExcellenceCertificateBorder.png"
-        )
+          "public/cert-assets/NationalsExcellenceCertificateBorder.png",
+        ),
       );
       const logoImage = getBase64Image(
-        path.join(__dirname, "public/cert-assets/vector.png")
+        path.join(__dirname, "public/cert-assets/vector.png"),
       );
       const cashfreeSignature = getBase64Image(
-        path.join(__dirname, "public/cert-assets/CashfreeFounderExcellence.png")
+        path.join(
+          __dirname,
+          "public/cert-assets/CashfreeFounderExcellence.png",
+        ),
+      );
+      const sankarshanBasuSignature = getBase64Image(
+        path.join(__dirname, "public/cert-assets/SankarshanBasuExcellence.png"),
       );
       const streakSignature = getBase64Image(
         path.join(
           __dirname,
-          "public/cert-assets/StreakCoFounderSignatureExcellence.png"
-        )
+          "public/cert-assets/StreakCoFounderSignatureExcellence.png",
+        ),
+      );
+      const mitulMehtaSignature = getBase64Image(
+        path.join(__dirname, "public/cert-assets/MitulMehtaSignature.png"),
       );
 
       // Replace image paths with base64 strings
@@ -1189,7 +1883,9 @@ const getHtml = (typeid) => {
         .replace("{{borderImage}}", borderImage)
         .replace("{{logoImage}}", logoImage)
         .replace("{{cashfreeSignature}}", cashfreeSignature)
-        .replace("{{streakSignature}}", streakSignature);
+        .replace("{{sankarshanBasuSignature}}", sankarshanBasuSignature)
+        .replace("{{streakSignature}}", streakSignature)
+        .replace("{{mitulMehtaSignature}}", mitulMehtaSignature);
 
       return template;
     }
@@ -1197,30 +1893,42 @@ const getHtml = (typeid) => {
       template = fs.readFileSync(
         __dirname +
           "/html/Nationals2024_25OutstandingPerformanceCertificate.html",
-        "utf-8"
+        "utf-8",
       );
 
       // Get base64 strings for all images
       const borderImage = getBase64Image(
         path.join(
           __dirname,
-          "public/cert-assets/NationalsOutstandingCertificateBorder.png"
-        )
+          "public/cert-assets/NationalsOutstandingCertificateBorder.png",
+        ),
       );
       const logoImage = getBase64Image(
-        path.join(__dirname, "public/cert-assets/vector.png")
+        path.join(__dirname, "public/cert-assets/vector.png"),
       );
       const cashfreeSignature = getBase64Image(
         path.join(
           __dirname,
-          "public/cert-assets/CashFreeFounderOutstanding.png"
-        )
+          "public/cert-assets/CashFreeFounderOutstanding.png",
+        ),
+      );
+      const sankarshanBasuSignature = getBase64Image(
+        path.join(
+          __dirname,
+          "public/cert-assets/SankarshanBasuOutstandingPerformance.png",
+        ),
       );
       const streakSignature = getBase64Image(
         path.join(
           __dirname,
-          "public/cert-assets/StreakCoFounderSignatureOutstanding.png"
-        )
+          "public/cert-assets/StreakCoFounderSignatureOutstanding.png",
+        ),
+      );
+      const mitulMehtaSignature = getBase64Image(
+        path.join(
+          __dirname,
+          "public/cert-assets/MitulMehtaOutstandingPerformance.png",
+        ),
       );
 
       // Replace image paths with base64 strings
@@ -1228,28 +1936,39 @@ const getHtml = (typeid) => {
         .replace("{{borderImage}}", borderImage)
         .replace("{{logoImage}}", logoImage)
         .replace("{{cashfreeSignature}}", cashfreeSignature)
-        .replace("{{streakSignature}}", streakSignature);
+        .replace("{{sankarshanBasuSignature}}", sankarshanBasuSignature)
+        .replace("{{streakSignature}}", streakSignature)
+        .replace("{{mitulMehtaSignature}}", mitulMehtaSignature);
 
       return template;
     }
     case 18: {
       template = fs.readFileSync(
         __dirname + "/html/Nationals2024_25TeachersCertificate.html",
-        "utf-8"
+        "utf-8",
       );
 
       // Get base64 strings for all images
       const borderImage = getBase64Image(
-        path.join(__dirname, "public/cert-assets/NationalTeachersBorder.png")
+        path.join(__dirname, "public/cert-assets/NationalTeachersBorder.png"),
       );
       const logoImage = getBase64Image(
-        path.join(__dirname, "public/cert-assets/vector.png")
+        path.join(__dirname, "public/cert-assets/vector.png"),
       );
       const cashfreeSignature = getBase64Image(
-        path.join(__dirname, "public/cert-assets/CashfreeCoFounderTeachers.png")
+        path.join(
+          __dirname,
+          "public/cert-assets/CashfreeCoFounderTeachers.png",
+        ),
+      );
+      const sankarshanBasuSignature = getBase64Image(
+        path.join(__dirname, "public/cert-assets/SankarshanBasuTeacherPrincipal.png"),
       );
       const streakSignature = getBase64Image(
-        path.join(__dirname, "public/cert-assets/StreakCoFounderTeachers.png")
+        path.join(__dirname, "public/cert-assets/StreakCoFounderTeachers.png"),
+      );
+      const mitulMehtaSignature = getBase64Image(
+        path.join(__dirname, "public/cert-assets/MitulMehtaTeacherPrincipal.png"),
       );
 
       // Replace image paths with base64 strings
@@ -1257,28 +1976,39 @@ const getHtml = (typeid) => {
         .replace("{{borderImage}}", borderImage)
         .replace("{{logoImage}}", logoImage)
         .replace("{{cashfreeSignature}}", cashfreeSignature)
-        .replace("{{streakSignature}}", streakSignature);
+        .replace("{{sankarshanBasuSignature}}", sankarshanBasuSignature)
+        .replace("{{streakSignature}}", streakSignature)
+        .replace("{{mitulMehtaSignature}}", mitulMehtaSignature);
 
       return template;
     }
     case 19: {
       template = fs.readFileSync(
         __dirname + "/html/Nationals2024_25PrincipalCertificate.html",
-        "utf-8"
+        "utf-8",
       );
 
       // Get base64 strings for all images
       const borderImage = getBase64Image(
-        path.join(__dirname, "public/cert-assets/NationalTeachersBorder.png")
+        path.join(__dirname, "public/cert-assets/NationalTeachersBorder.png"),
       );
       const logoImage = getBase64Image(
-        path.join(__dirname, "public/cert-assets/vector.png")
+        path.join(__dirname, "public/cert-assets/vector.png"),
       );
       const cashfreeSignature = getBase64Image(
-        path.join(__dirname, "public/cert-assets/CashfreeCoFounderTeachers.png")
+        path.join(
+          __dirname,
+          "public/cert-assets/CashfreeCoFounderTeachers.png",
+        ),
+      );
+      const sankarshanBasuSignature = getBase64Image(
+        path.join(__dirname, "public/cert-assets/SankarshanBasuTeacherPrincipal.png"),
       );
       const streakSignature = getBase64Image(
-        path.join(__dirname, "public/cert-assets/StreakCoFounderTeachers.png")
+        path.join(__dirname, "public/cert-assets/StreakCoFounderTeachers.png"),
+      );
+      const mitulMehtaSignature = getBase64Image(
+        path.join(__dirname, "public/cert-assets/MitulMehtaTeacherPrincipal.png"),
       );
 
       // Replace image paths with base64 strings
@@ -1286,19 +2016,21 @@ const getHtml = (typeid) => {
         .replace("{{borderImage}}", borderImage)
         .replace("{{logoImage}}", logoImage)
         .replace("{{cashfreeSignature}}", cashfreeSignature)
-        .replace("{{streakSignature}}", streakSignature);
+        .replace("{{sankarshanBasuSignature}}", sankarshanBasuSignature)
+        .replace("{{streakSignature}}", streakSignature)
+        .replace("{{mitulMehtaSignature}}", mitulMehtaSignature);
 
       return template;
     }
     case 20: {
       template = fs.readFileSync(
         __dirname + "/html/SchoolReportNew.html",
-        "utf-8"
+        "utf-8",
       );
 
       // Get base64 string for vector.png
       const logoImage = getBase64Image(
-        path.join(__dirname, "public/cert-assets/vector.png")
+        path.join(__dirname, "public/cert-assets/vector.png"),
       );
 
       // Replace logoPath in template with base64 image
@@ -1311,28 +2043,28 @@ const getHtml = (typeid) => {
 
       // Get base64 strings for all images
       const nfoInviteImage = getBase64Image(
-        path.join(__dirname, "public/cert-assets/nfo-invite-2.png")
+        path.join(__dirname, "public/cert-assets/nfo-invite-2.png"),
       );
       const qrCodeImage = getBase64Image(
-        path.join(__dirname, "public/cert-assets/image-1204.png")
+        path.join(__dirname, "public/cert-assets/image-1204.png"),
       );
       const frameImage1 = getBase64Image(
-        path.join(__dirname, "public/cert-assets/frame-11889.png")
+        path.join(__dirname, "public/cert-assets/frame-11889.png"),
       );
       const frameImage2 = getBase64Image(
-        path.join(__dirname, "public/cert-assets/frame-11887.png")
+        path.join(__dirname, "public/cert-assets/frame-11887.png"),
       );
       const frameImage3 = getBase64Image(
-        path.join(__dirname, "public/cert-assets/frame-11889-1.png")
+        path.join(__dirname, "public/cert-assets/frame-11889-1.png"),
       );
       const groupImage = getBase64Image(
-        path.join(__dirname, "public/cert-assets/group-11805.png")
+        path.join(__dirname, "public/cert-assets/group-11805.png"),
       );
 
       // Debug: Check if font files exist and log their sizes
       const oggMediumPath = path.join(
         __dirname,
-        "public/fonts/OggText-Medium.ttf"
+        "public/fonts/OggText-Medium.ttf",
       );
       const oggBoldPath = path.join(__dirname, "public/fonts/OggText-Bold.ttf");
 
@@ -1364,36 +2096,36 @@ const getHtml = (typeid) => {
     case 22: {
       template = fs.readFileSync(
         __dirname + "/html/KVBSchoolCertificate.html",
-        "utf-8"
+        "utf-8",
       );
 
       // Get base64 strings for all images
       const borderImage = getBase64Image(
         path.join(
           __dirname,
-          "public/cert-assets/NationalsExcellenceCertificateBorder.png"
-        )
+          "public/cert-assets/NationalsExcellenceCertificateBorder.png",
+        ),
       );
       const logoImage = getBase64Image(
-        path.join(__dirname, "public/vector.svg")
+        path.join(__dirname, "public/vector.svg"),
       );
       const kvbLogo = getBase64Image(
-        path.join(__dirname, "public/cert-assets/KVBlogo.png")
+        path.join(__dirname, "public/cert-assets/KVBlogo.png"),
       );
       const underlineImage = getBase64Image(
-        path.join(__dirname, "public/cert-assets/UnderlineKVB.png")
+        path.join(__dirname, "public/cert-assets/UnderlineKVB.png"),
       );
       const kvbSignature = getBase64Image(
-        path.join(__dirname, "public/cert-assets/KVBSignature.png")
+        path.join(__dirname, "public/cert-assets/KVBSignature.png"),
       );
       const streakSignature = getBase64Image(
         path.join(
           __dirname,
-          "public/cert-assets/StreakCoFounderSignatureExcellence.png"
-        )
+          "public/cert-assets/StreakCoFounderSignatureExcellence.png",
+        ),
       );
       const mitulMehtaSignature = getBase64Image(
-        path.join(__dirname, "public/cert-assets/MitulMehtaSignature.png")
+        path.join(__dirname, "public/cert-assets/MitulMehtaSignature.png"),
       );
 
       // Replace image paths with base64 strings
@@ -1411,36 +2143,36 @@ const getHtml = (typeid) => {
     case 23: {
       template = fs.readFileSync(
         __dirname + "/html/KVBSchoolCertificateOutstanding.html",
-        "utf-8"
+        "utf-8",
       );
 
       // Get base64 strings for all images
       const borderImage = getBase64Image(
         path.join(
           __dirname,
-          "public/cert-assets/NationalsExcellenceCertificateBorder.png"
-        )
+          "public/cert-assets/NationalsExcellenceCertificateBorder.png",
+        ),
       );
       const logoImage = getBase64Image(
-        path.join(__dirname, "public/vector.svg")
+        path.join(__dirname, "public/vector.svg"),
       );
       const kvbLogo = getBase64Image(
-        path.join(__dirname, "public/cert-assets/KVBlogo.png")
+        path.join(__dirname, "public/cert-assets/KVBlogo.png"),
       );
       const underlineImage = getBase64Image(
-        path.join(__dirname, "public/cert-assets/UnderlineKVB.png")
+        path.join(__dirname, "public/cert-assets/UnderlineKVB.png"),
       );
       const kvbSignature = getBase64Image(
-        path.join(__dirname, "public/cert-assets/KVBSignature.png")
+        path.join(__dirname, "public/cert-assets/KVBSignature.png"),
       );
       const streakSignature = getBase64Image(
         path.join(
           __dirname,
-          "public/cert-assets/StreakCoFounderSignatureExcellence.png"
-        )
+          "public/cert-assets/StreakCoFounderSignatureExcellence.png",
+        ),
       );
       const mitulMehtaSignature = getBase64Image(
-        path.join(__dirname, "public/cert-assets/MitulMehtaSignature.png")
+        path.join(__dirname, "public/cert-assets/MitulMehtaSignature.png"),
       );
 
       // Replace image paths with base64 strings
@@ -1458,36 +2190,36 @@ const getHtml = (typeid) => {
     case 24: {
       template = fs.readFileSync(
         __dirname + "/html/KVBSchoolCertificateIR.html",
-        "utf-8"
+        "utf-8",
       );
 
       // Get base64 strings for all images
       const borderImage = getBase64Image(
         path.join(
           __dirname,
-          "public/cert-assets/NationalsExcellenceCertificateBorder.png"
-        )
+          "public/cert-assets/NationalsExcellenceCertificateBorder.png",
+        ),
       );
       const logoImage = getBase64Image(
-        path.join(__dirname, "public/vector.svg")
+        path.join(__dirname, "public/vector.svg"),
       );
       const kvbLogo = getBase64Image(
-        path.join(__dirname, "public/cert-assets/KVBlogo.png")
+        path.join(__dirname, "public/cert-assets/KVBlogo.png"),
       );
       const underlineImage = getBase64Image(
-        path.join(__dirname, "public/cert-assets/UnderlineKVB.png")
+        path.join(__dirname, "public/cert-assets/UnderlineKVB.png"),
       );
       const kvbSignature = getBase64Image(
-        path.join(__dirname, "public/cert-assets/KVBSignature.png")
+        path.join(__dirname, "public/cert-assets/KVBSignature.png"),
       );
       const streakSignature = getBase64Image(
         path.join(
           __dirname,
-          "public/cert-assets/StreakCoFounderSignatureExcellence.png"
-        )
+          "public/cert-assets/StreakCoFounderSignatureExcellence.png",
+        ),
       );
       const mitulMehtaSignature = getBase64Image(
-        path.join(__dirname, "public/cert-assets/MitulMehtaSignature.png")
+        path.join(__dirname, "public/cert-assets/MitulMehtaSignature.png"),
       );
 
       // Replace image paths with base64 strings
@@ -1505,36 +2237,36 @@ const getHtml = (typeid) => {
     case 25: {
       template = fs.readFileSync(
         __dirname + "/html/KVBSchoolCertificateOutstandingIR.html",
-        "utf-8"
+        "utf-8",
       );
 
       // Get base64 strings for all images
       const borderImage = getBase64Image(
         path.join(
           __dirname,
-          "public/cert-assets/NationalsExcellenceCertificateBorder.png"
-        )
+          "public/cert-assets/NationalsExcellenceCertificateBorder.png",
+        ),
       );
       const logoImage = getBase64Image(
-        path.join(__dirname, "public/vector.svg")
+        path.join(__dirname, "public/vector.svg"),
       );
       const kvbLogo = getBase64Image(
-        path.join(__dirname, "public/cert-assets/KVBlogo.png")
+        path.join(__dirname, "public/cert-assets/KVBlogo.png"),
       );
       const underlineImage = getBase64Image(
-        path.join(__dirname, "public/cert-assets/UnderlineKVB.png")
+        path.join(__dirname, "public/cert-assets/UnderlineKVB.png"),
       );
       const kvbSignature = getBase64Image(
-        path.join(__dirname, "public/cert-assets/KVBSignature.png")
+        path.join(__dirname, "public/cert-assets/KVBSignature.png"),
       );
       const streakSignature = getBase64Image(
         path.join(
           __dirname,
-          "public/cert-assets/StreakCoFounderSignatureExcellence.png"
-        )
+          "public/cert-assets/StreakCoFounderSignatureExcellence.png",
+        ),
       );
       const mitulMehtaSignature = getBase64Image(
-        path.join(__dirname, "public/cert-assets/MitulMehtaSignature.png")
+        path.join(__dirname, "public/cert-assets/MitulMehtaSignature.png"),
       );
 
       // Replace image paths with base64 strings
@@ -1552,29 +2284,29 @@ const getHtml = (typeid) => {
     case 26: {
       template = fs.readFileSync(
         __dirname + "/html/KVBSchoolPrincipal.html",
-        "utf-8"
+        "utf-8",
       );
 
       const logoImage = getBase64Image(
-        path.join(__dirname, "public/vector.svg")
+        path.join(__dirname, "public/vector.svg"),
       );
       const kvbLogo = getBase64Image(
-        path.join(__dirname, "public/cert-assets/KVBlogo.png")
+        path.join(__dirname, "public/cert-assets/KVBlogo.png"),
       );
       const underlineImage = getBase64Image(
-        path.join(__dirname, "public/cert-assets/UnderlineKVB.png")
+        path.join(__dirname, "public/cert-assets/UnderlineKVB.png"),
       );
       const kvbSignature = getBase64Image(
-        path.join(__dirname, "public/cert-assets/KVBSignature.png")
+        path.join(__dirname, "public/cert-assets/KVBSignature.png"),
       );
       const streakSignature = getBase64Image(
         path.join(
           __dirname,
-          "public/cert-assets/StreakCoFounderSignatureExcellence.png"
-        )
+          "public/cert-assets/StreakCoFounderSignatureExcellence.png",
+        ),
       );
       const mitulMehtaSignature = getBase64Image(
-        path.join(__dirname, "public/cert-assets/MitulMehtaSignature.png")
+        path.join(__dirname, "public/cert-assets/MitulMehtaSignature.png"),
       );
 
       template = template
@@ -1587,10 +2319,22 @@ const getHtml = (typeid) => {
 
       return template;
     }
+    case 30: {
+      template = fs.readFileSync(
+        __dirname + "/html/SchoolRegistrationForm.html",
+        "utf-8",
+      );
+      const logoImage = getBase64Image(
+        path.join(__dirname, "public/cert-assets/NFOLogoSingle.png"),
+      );
+      template = template.replace("{{logoImage}}", logoImage);
+      return template;
+    }
+    case 27:
     default: {
       template = fs.readFileSync(
         __dirname + "/html/ReportsWOTax.html",
-        "utf-8"
+        "utf-8",
       );
     }
   }
@@ -1611,7 +2355,7 @@ const generateSafeFilename = (fullName, index) => {
       .replace(/[^a-zA-Z0-9\s]/g, "") // Remove special characters
       .replace(/\s+/g, "_") // Replace spaces with underscores
       .replace(/_+/g, "_") // Replace multiple underscores with single underscore
-      .toLowerCase();
+      .toUpperCase();
   }
 
   // Always append the index to ensure uniqueness
@@ -1759,31 +2503,31 @@ app.post("/api/generate-school-report", async (req, res) => {
           logoPath: getBase64Image(path.join(__dirname, "public/vector.svg")),
           vectorIcon: getBase64Image(path.join(__dirname, "public/Vector.png")),
           statsIcon: getBase64Image(
-            path.join(__dirname, "public/material-symbols_trophy.png")
+            path.join(__dirname, "public/material-symbols_trophy.png"),
           ),
           backgroundImage: getBase64Image(
-            path.join(__dirname, "public/cert-assets/background.png")
+            path.join(__dirname, "public/cert-assets/background.png"),
           ),
 
           // Font paths
           oggTextBook: getBase64Font(
-            path.join(__dirname, "public/fonts/OggText-Book.ttf")
+            path.join(__dirname, "public/fonts/OggText-Book.ttf"),
           ),
           oggTextLight: getBase64Font(
-            path.join(__dirname, "public/fonts/OggText-Light.ttf")
+            path.join(__dirname, "public/fonts/OggText-Light.ttf"),
           ),
           oggTextBold: getBase64Font(
-            path.join(__dirname, "public/fonts/OggText-Bold.ttf")
+            path.join(__dirname, "public/fonts/OggText-Bold.ttf"),
           ),
           oggTextMedium: getBase64Font(
-            path.join(__dirname, "public/fonts/OggText-Medium.ttf")
+            path.join(__dirname, "public/fonts/OggText-Medium.ttf"),
           ),
         };
 
         // Generate HTML
         const template = fs.readFileSync(
           path.join(__dirname, "html/SchoolReportNew.html"),
-          "utf8"
+          "utf8",
         );
         const compiledTemplate = Handlebars.compile(template);
         const html = compiledTemplate(transformedData);
@@ -1813,7 +2557,7 @@ app.post("/api/generate-school-report", async (req, res) => {
       } catch (error) {
         console.error(
           `Error generating report for ${schoolData.schoolName}:`,
-          error
+          error,
         );
         reports.push({
           schoolName: schoolData.schoolName,
@@ -1859,7 +2603,8 @@ app.post("/api/generate-school-report", async (req, res) => {
 function cleanupOldReports(directory, maxAgeHours = 24) {
   fs.readdir(directory, (err, files) => {
     if (err) {
-      if (err.code !== "ENOENT") console.error("Error reading reports directory:", err);
+      if (err.code !== "ENOENT")
+        console.error("Error reading reports directory:", err);
       return;
     }
 
@@ -1920,7 +2665,7 @@ Handlebars.registerHelper(
 
     // Return false (hide) if school average is 0 OR if national average is less than school average
     return !(schoolAvg === 0 || schoolAvg < nationalAvg);
-  }
+  },
 );
 
 // Add this function to check if fonts are loaded
@@ -2052,7 +2797,7 @@ const generateSchoolReports = async (schoolsData) => {
               "Total Score": student.Total + "%",
               "Zonal Rank": student["Zonal Rank"],
               "AIR*": student["All India Rank"],
-            })
+            }),
           ),
           "Batch Grade 9 - 10": schoolData.level1["Batch Grade 9 - 10"].map(
             (student) => ({
@@ -2062,7 +2807,7 @@ const generateSchoolReports = async (schoolsData) => {
               "Total Score": student.Total + "%",
               "Zonal Rank": student["Zonal Rank"],
               "AIR*": student["All India Rank"],
-            })
+            }),
           ),
           "Batch Grade 11 - 12": schoolData.level1["Batch Grade 11 - 12"].map(
             (student) => ({
@@ -2072,7 +2817,7 @@ const generateSchoolReports = async (schoolsData) => {
               "Total Score": student.Total + "%",
               "Zonal Rank": student["Zonal Rank"],
               "AIR*": student["All India Rank"],
-            })
+            }),
           ),
         },
 
@@ -2118,29 +2863,29 @@ const generateSchoolReports = async (schoolsData) => {
           getBase64Image(path.join(__dirname, "public/Vector.png")) || "",
         statsIcon:
           getBase64Image(
-            path.join(__dirname, "public/material-symbols_trophy.png")
+            path.join(__dirname, "public/material-symbols_trophy.png"),
           ) || "",
         backgroundImage:
           getBase64Image(
-            path.join(__dirname, "public/cert-assets/background.png")
+            path.join(__dirname, "public/cert-assets/background.png"),
           ) || "",
 
         // Update font paths to match your actual files
         oggTextBook:
           getBase64Font(
-            path.join(__dirname, "public/fonts/OggText-Book.ttf")
+            path.join(__dirname, "public/fonts/OggText-Book.ttf"),
           ) || "",
         oggTextLight:
           getBase64Font(
-            path.join(__dirname, "public/fonts/OggText-Light.ttf")
+            path.join(__dirname, "public/fonts/OggText-Light.ttf"),
           ) || "",
         oggTextBold:
           getBase64Font(
-            path.join(__dirname, "public/fonts/OggText-Bold.ttf")
+            path.join(__dirname, "public/fonts/OggText-Bold.ttf"),
           ) || "",
         oggTextMedium:
           getBase64Font(
-            path.join(__dirname, "public/fonts/OggText-Medium.ttf")
+            path.join(__dirname, "public/fonts/OggText-Medium.ttf"),
           ) || "",
       };
 
@@ -2148,27 +2893,29 @@ const generateSchoolReports = async (schoolsData) => {
       console.log("Asset check:");
       console.log(
         "Logo:",
-        fs.existsSync(path.join(__dirname, "public/Vector.png"))
+        fs.existsSync(path.join(__dirname, "public/Vector.png")),
       );
       console.log(
         "Vector:",
-        fs.existsSync(path.join(__dirname, "public/cert-assets/vector.png"))
+        fs.existsSync(path.join(__dirname, "public/cert-assets/vector.png")),
       );
       console.log(
         "Trophy:",
         fs.existsSync(
-          path.join(__dirname, "public/material-symbols_trophy.png")
-        )
+          path.join(__dirname, "public/material-symbols_trophy.png"),
+        ),
       );
       console.log(
         "Background:",
-        fs.existsSync(path.join(__dirname, "public/cert-assets/background.png"))
+        fs.existsSync(
+          path.join(__dirname, "public/cert-assets/background.png"),
+        ),
       );
 
       // Generate HTML
       const template = fs.readFileSync(
         path.join(__dirname, "html/SchoolReportNew.html"),
-        "utf8"
+        "utf8",
       );
       const compiledTemplate = Handlebars.compile(template);
       const html = compiledTemplate(transformedData);
@@ -2178,9 +2925,9 @@ const generateSchoolReports = async (schoolsData) => {
         path.join(
           __dirname,
           "reports/debug",
-          `${schoolData.schoolName.replace(/[^a-zA-Z0-9]/g, "_")}.html`
+          `${schoolData.schoolName.replace(/[^a-zA-Z0-9]/g, "_")}.html`,
         ),
-        html
+        html,
       );
 
       // Generate PDF (typeId 20 = SchoolReportNew, A4 landscape)
@@ -2203,7 +2950,7 @@ const generateSchoolReports = async (schoolsData) => {
       fs.writeFileSync(filePath, pdf);
 
       console.log(
-        `Successfully generated report for: ${schoolData.schoolName}`
+        `Successfully generated report for: ${schoolData.schoolName}`,
       );
 
       reports.push({
@@ -2214,7 +2961,7 @@ const generateSchoolReports = async (schoolsData) => {
     } catch (error) {
       console.error(
         `Error generating report for ${schoolData.schoolName}:`,
-        error
+        error,
       );
       reports.push({
         schoolName: schoolData.schoolName,
@@ -2257,6 +3004,78 @@ app.post("/api/generate-school-reports-batch", async (req, res) => {
   }
 });
 
+app.post("/api/generate-school-registration-form", async (req, res) => {
+  try {
+    const data = req.body || {};
+    const normalizedLocation = normalizeRegistrationLocation(
+      data.city,
+      data.state,
+    );
+
+    const templatePath = path.join(__dirname, "html/SchoolRegistrationForm.html");
+    let template = fs.readFileSync(templatePath, "utf-8");
+
+    // Inject logo as base64 so Puppeteer resolves it correctly
+    template = template.replace(
+      "{{logoImage}}",
+      getBase64Image(path.join(__dirname, "public/cert-assets/NFOLogoSingle.png"))
+    );
+
+    const html = generateHTML(
+      {
+        oggTextBook: getBase64Font(path.join(__dirname, "public/fonts/OggText-Book.ttf")),
+        oggTextBold: getBase64Font(path.join(__dirname, "public/fonts/OggText-Bold.ttf")),
+        schoolName: data.schoolName || "",
+        longSchoolName: (data.schoolName || "").length > 40,
+        schoolAddress: data.schoolAddress || "",
+        city: normalizedLocation.city,
+        state: normalizedLocation.state,
+        pincode: data.pincode || "",
+        schoolPhone: data.schoolPhone || "",
+        schoolEmail: data.schoolEmail || "",
+        principalName: data.principalName || "",
+        principalPhone: data.principalPhone || "",
+        principalEmail: data.principalEmail || "",
+        coordinatorName: data.coordinatorName || "",
+        coordinatorPhone: data.coordinatorPhone || "",
+        coordinatorEmail: data.coordinatorEmail || "",
+        monthJune: data.monthJune || false,
+        monthJuly: data.monthJuly || false,
+        monthAug: data.monthAug || false,
+        monthSept: data.monthSept || false,
+        monthOct: data.monthOct || false,
+        monthNov: data.monthNov || false,
+        signature: data.signature || "",
+      },
+      template
+    );
+
+    const pdfBuffer = await generatePDFWithPuppeteer(html, 30);
+
+    const schoolSlug = (data.schoolName || "school")
+      .replace(/[^a-z0-9]/gi, "_")
+      .toLowerCase();
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="NFO_RegistrationForm_${schoolSlug}.pdf"`
+    );
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error("Error generating school registration form:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Failed to generate school registration form",
+      error: error.message,
+    });
+  }
+});
+
+Handlebars.registerHelper("longSchoolName", function (name) {
+  return typeof name === "string" && name.length > 40;
+});
+
 Handlebars.registerHelper("default", function (value, defaultValue) {
   // Check for null, undefined, empty string, or only whitespace
   return value != null && value !== "" && String(value).trim() !== ""
@@ -2289,7 +3108,7 @@ Handlebars.registerHelper(
 
     // Return false (hide) if school average is greater than national average
     return !(schoolAvg < nationalAvg);
-  }
+  },
 );
 
 // Add this near your other Handlebars helpers
@@ -2315,13 +3134,13 @@ Handlebars.registerHelper("getNameSizeClass", function (name) {
 
   const nameLength = name.length;
 
-  // Adjust thresholds based on typical name lengths
-  // For 40px font, names longer than ~25 characters may wrap
-  if (nameLength > 25) {
+  if (nameLength > 35) {
+    return "xsmall"; // 22px — very long names like "M CHARANJIT HARSHAVARDHAN"
+  } else if (nameLength > 25) {
     return "small"; // 30px
   } else if (nameLength > 15) {
-    return "small"; // 40px (default)
+    return "medium"; // 40px
   } else {
-    return "small"; // 60px
+    return "large"; // 60px
   }
 });

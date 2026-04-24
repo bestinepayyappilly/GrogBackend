@@ -6,6 +6,7 @@
     "cors": "^2.8.5",
     "express": "^4.18.2",
     "express-fileupload": "^1.4.0",
+    "googleapis": "^171.4.0",
     "handlebars": "^4.7.8",
     "papaparse": "^5.4.1",
     "pdf-lib": "^1.17.1",

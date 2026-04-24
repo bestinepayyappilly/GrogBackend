@@ -6,235 +6,222 @@
     <style>
         body {
             margin: 0;
-            padding: 0;
+            padding: 0px 0px 0px 0px;
             font-family: 'Cardo', serif;
+            font-size: 18px;
+            line-height: normal;
+            letter-spacing: normal;
         }
-
         .page-wrapper {
+            height: 100vh;
             display: flex;
             width: 100%;
             align-items: center;
             justify-content: center;
         }
 
-        .cert-padding {
-            padding:6px 4px 4px 4px;
-            line-height: 0;
-        }
-
         .certificate-container {
+            transform: scale(1.284);
             width: 824px;
             height: 583px;
             position: relative;
-        }
-
-        .frame {
-            position: absolute;
-            width: 824px;
-            height: 583px;
-            top: 0;
-            left: 0;
-        }
-
-        .logo {
-            position: absolute;
-            width: 199px;
-            height: 88px;
-            top: 30px;
-            left: 313px;
-            object-fit: contain;
-        }
-
-        .certificate-of {
-            position: absolute;
-            top: 130px;
-            left: 0;
-            right: 0;
-            font-family: 'Cardo', serif;
-            font-weight: 600;
-            color: #2c6ab1;
-            font-size: 45px;
-            text-align: center;
-            line-height: 36.5px;
-        }
-
-        .certify-text {
-            position: absolute;
-            top: 234px;
-            left: 0;
-            right: 0;
-            margin: 0;
-            font-family: 'Cardo', serif;
-            font-weight: 700;
-            color: #183041;
-            font-size: 16.8px;
-            text-align: center;
-            line-height: 26.6px;
-        }
-
-        .student-name {
-            position: absolute;
-            top: 260px;
-            left: 0;
-            right: 0;
-            font-family: 'Cardo', serif;
-            font-weight: 700;
-            color: #183041;
-            font-size: 61.7px;
-            text-align: center;
-            line-height: 97.8px;
-            white-space: nowrap;
-        }
-
-        .school-info {
-            position: absolute;
-            top: 358px;
-            left: 0;
-            right: 0;
-            font-family: 'Cardo', serif;
-            font-weight: 400;
-            font-style: italic;
-            color: #000000;
-            font-size: 15.3px;
-            text-align: center;
-            line-height: 21.3px;
-            white-space: nowrap;
-        }
-
-        .rank-info {
-            position: absolute;
-            top: 386px;
-            left: 0;
-            right: 0;
-            margin: 0;
-            font-family: 'Cardo', serif;
-            font-weight: 400;
-            color: #000000;
-            font-size: 15.3px;
-            text-align: center;
-            line-height: 21.3px;
-            white-space: nowrap;
-        }
-
-        .exam-date {
-            position: absolute;
-            top: 412px;
-            left: 0;
-            right: 0;
-            margin: 0;
-            font-family: 'Cardo', serif;
-            font-weight: 400;
-            color: #000000;
-            font-size: 15.3px;
-            text-align: center;
-            line-height: 21.3px;
-            white-space: nowrap;
-        }
-
-        .signatures-section {
-            position: absolute;
-            top: 475px;
-            left: 10px;
-            right: 10px;
-            display: flex;
-            justify-content: space-around;
-            align-items: flex-start;
-        }
-
-        .sig-block {
+            background-color: #FFF;
+            box-sizing: border-box;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 3px;
+            justify-content: space-between;
+            padding: 38px 21px 40px 20px;
+            text-align: center;
+            background-image: url('{{borderImage}}');
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: 100% 100%;
         }
 
-        .sig-image {
-            width: 100px;
+        .header-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 20px;
+            max-width: 100%;
+        }
+
+        .logo-container {
+            align-self: stretch;
+            display: flex;
+            flex-direction: row;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 0px 20px 0px 21px;
+        }
+
+        .nfo-logo {
+            height: 80px;
+            position: relative;
+            object-fit: contain;
+        }
+
+        .certificate-title {
+            margin: 0;
+            align-self: center;
+            position: relative;
+            font-size: 45px;
+            line-height: 92%;
+            font-weight: 600;
+            color: #2c6ab1;
+            text-align: center;
+            width: 100%;
+        }
+
+        .certificate-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 0 22px;
+            width: 100%;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .student-name {
+            margin: 0;
+            font-weight: 700;
+            width: 700px;
+            text-align: center;
+            word-wrap: break-word;
+            padding: 0px 0;
+            color: #183041;
+        }
+
+        .student-name.large  { font-size: 61.7px; }
+        .student-name.medium { font-size: 42px; }
+        .student-name.small  { font-size: 30px; }
+        .student-name.xsmall { font-size: 22px; }
+        .student-name { white-space: nowrap; }
+
+        .school-info {
+            line-height: 120%;
+            font-style: italic;
+            text-align: center;
+            width: 100%;
+            color: #000;
+        }
+
+        .rank-info, .exam-date {
+            line-height: 90%;
+            text-align: center;
+            width: 100%;
+            color: #000;
+        }
+
+        .signatures-container {
+            display: flex;
+            flex-direction: row;
+            justify-content: space-evenly;
+            align-items: flex-end;
+            width: 100%;
+            color: #000;
+        }
+
+        .signature-block {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 0px 6px 0px 0px;
+            box-sizing: border-box;
+            font-size: 13.8px;
+        }
+
+        .signature-image {
+            object-fit: contain;
             height: 50px;
-            object-fit: cover;
         }
 
-        .sig-name {
-            font-family: 'Cardo', serif;
+        .signature-image.cashfree   { width: 60px; }
+        .signature-image.sankarshan { width: 130px; height: 70px; margin-bottom: -10px; }
+        .signature-image.streak     { width: 100px; }
+        .signature-image.mitul      { width: 100px; }
+
+        .signature-name {
+            display: flex;
+            padding: 0 28px;
             font-weight: 700;
-            color: #000000;
-            font-size: 13px;
-            line-height: 17px;
-            white-space: nowrap;
-        }
-
-        .sig-title {
-            font-family: 'Cardo', serif;
-            font-weight: 400;
-            color: #000000;
-            font-size: 11.5px;
-            line-height: 15px;
-            white-space: nowrap;
-        }
-
-        .badge {
-            position: absolute;
-            width: 155px;
-            height: 51px;
-            top: 525px;
-            left: 335px;
-        }
-
-        .badge-text {
-            position: absolute;
-            top: 541px;
-            left: 362px;
-            font-family: 'Cardo', serif;
-            font-weight: 700;
-            color: #ffffff;
-            font-size: 12px;
             line-height: 19px;
-            white-space: nowrap;
+            min-width: 71px;
+        }
+
+        .signature-title {
+            line-height: 19px;
+            min-width: 128px;
         }
     </style>
 </head>
 <body>
     <div class="page-wrapper">
-        <div class="cert-padding">
         <div class="certificate-container">
-            <img class="frame" src="{{borderImage}}" alt=""/>
-            <img class="logo" src="{{logoImage}}" alt="NFO Logo"/>
-
-            <div class="certificate-of">Certificate of<br>Participation</div>
-
-            <p class="certify-text">This is to certify that</p>
-
-            <div class="student-name">{{name}}</div>
-
-            <div class="school-info">of grade {{class}} from {{school}}</div>
-
-            <p class="rank-info">achieved All India Rank {{rank}} in the National level (Level II) of the </p>
-
-            <p class="exam-date">National Finance Olympiad held on {{date}}</p>
-
-            <div class="signatures-section">
-                <div class="sig-block">
-                    <img class="sig-image" src="{{cashfreeSignature}}" alt=""/>
-                    <div class="sig-name">Reeju Datta</div>
-                    <div class="sig-title">Co-founder, Cashfree</div>
+            <div class="header-content">
+                <div class="logo-container">
+                    <img class="nfo-logo" alt="NFO Logo" src="{{logoImage}}"/>
                 </div>
-                <div class="sig-block">
-                    <img class="sig-image" src="{{kvbSignature}}" alt=""/>
-                    <div class="sig-name">Sankarshan Basu</div>
-                    <div class="sig-title">Professor, IIM Bangalore</div>
-                </div>
-                <div class="sig-block">
-                    <img class="sig-image" src="{{streakSignature}}" alt=""/>
-                    <div class="sig-name">Shiv Bidani</div>
-                    <div class="sig-title">Co-founder, NFO</div>
-                </div>
-                <div class="sig-block">
-                    <img class="sig-image" src="{{mitulMehtaSignature}}" alt=""/>
-                    <div class="sig-name">Mitul Mehta</div>
-                    <div class="sig-title">Co-founder, NFO</div>
+                <div style="color: #2c6ab1;">
+                    <div class="certificate-title">
+                        Certificate of<br>Participation
+                    </div>
+                    <div class="certificate-content">
+                        <b style="line-height: 25px; margin-top: 16px; color: #183041;">This is to certify that</b>
+
+                        <h1 class="student-name {{getNameSizeClass name}}">{{name}}</h1>
+
+                        <i class="school-info">
+                            Of grade {{class}} from {{school}}
+                        </i>
+
+                        <div class="rank-info">
+                            achieved All India Rank {{rank}} in the National level (Level II) of the
+                        </div>
+
+                        <div class="exam-date">
+                            National Finance Olympiad held on {{date}}
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
+            <div class="signatures-container">
+                <div class="signature-block">
+                    <img class="signature-image cashfree" alt="CashFree Signature" src="{{cashfreeSignature}}"/>
+                    <div>
+                        <div class="signature-name">Reeju Datta</div>
+                        <div class="signature-title">Co-founder, Cashfree</div>
+                    </div>
+                </div>
+                <div class="signature-block">
+                    <img class="signature-image sankarshan" alt="Sankarshan Basu Signature" src="{{sankarshanBasuSignature}}"/>
+                    <div>
+                        <div class="signature-name">Sankarshan Basu</div>
+                        <div class="signature-title">Professor, IIM Bangalore</div>
+                    </div>
+                </div>
+                <div class="signature-block">
+                    <img class="signature-image streak" alt="Streak Signature" src="{{streakSignature}}"/>
+                    <div>
+                        <div class="signature-name">Shiv Bidani</div>
+                        <div class="signature-title">Co-founder, NFO</div>
+                    </div>
+                </div>
+                <div class="signature-block">
+                    <img class="signature-image mitul" alt="Mitul Mehta Signature" src="{{mitulMehtaSignature}}"/>
+                    <div>
+                        <div class="signature-name">Mitul Mehta</div>
+                        <div class="signature-title">Co-founder, NFO</div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </body>

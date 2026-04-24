@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <link href="https://fonts.googleapis.com/css2?family=Cardo:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cardo:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
     <style>
         body {
             margin: 0;
@@ -12,8 +12,8 @@
             line-height: normal;
             letter-spacing: normal;
         }
-
         .page-wrapper {
+            height: 100vh;
             display: flex;
             width: 100%;
             align-items: center;
@@ -21,6 +21,7 @@
         }
 
         .certificate-container {
+            transform: scale(1.202);
             width: 885px;
             height: 623px;
             position: relative;
@@ -30,8 +31,8 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: flex-start;
-            padding: 42px 0px 45px 0px;
+            justify-content: space-between;
+            padding: 38px 21px 40px 20px;
             text-align: center;
             background-image: url('{{borderImage}}');
             background-repeat: no-repeat;
@@ -42,11 +43,10 @@
         .header-content {
             display: flex;
             flex-direction: column;
-            align-items: flex-end;
+            align-items: center;
             justify-content: flex-start;
-            gap: 24px;
+            gap: 20px;
             max-width: 100%;
-            margin-left: 30px;
         }
 
         .logo-container {
@@ -59,8 +59,9 @@
         }
 
         .nfo-logo {
-            height: 87.5px;
+            height: 80px;
             position: relative;
+            object-fit: contain;
         }
 
         .certificate-title {
@@ -95,7 +96,8 @@
             word-wrap: break-word;
             padding: 0px 0;
             color: #000;
-            font-size: 60px;
+            white-space: nowrap;
+            text-transform: uppercase;
         }
 
         .school-info {
@@ -110,14 +112,15 @@
             line-height: 150%;
             text-align: center;
             width: 100%;
-            color: #34454E99;
+            color: #000000;
         }
-        
+
 
         .signatures-container {
             display: flex;
             flex-direction: row;
-            justify-content: space-between;
+            justify-content: space-evenly;
+            align-items: flex-end;
             width: 100%;
             color: #000;
         }
@@ -132,26 +135,15 @@
             font-size: 13.8px;
         }
 
-        .signature-block.left {
-            margin-left: 76px;
-        }
-
-        .signature-block.right {
-            margin-right: 76px;
-        }
-
         .signature-image {
             object-fit: contain;
             height: 50px;
         }
 
-        .signature-image.cashfree {
-            width: 60px;
-        }
-
-        .signature-image.streak {
-            width: 100px;
-        }
+        .signature-image.cashfree    { width: 60px; }
+        .signature-image.sankarshan  { width: 130px; height: 70px; margin-bottom: -10px; }
+        .signature-image.streak      { width: 100px; }
+        .signature-image.mitul       { width: 100px; }
 
         .signature-name {
             display: flex;
@@ -166,9 +158,10 @@
             min-width: 128px;
         }
 
-        .student-name.large { font-size: 60px; }
-        .student-name.medium { font-size: 40px; }
-        .student-name.small { font-size: 30px; }
+        .student-name.large  { font-size: 61.7px; }
+        .student-name.medium { font-size: 42px; }
+        .student-name.small  { font-size: 30px; }
+        .student-name.xsmall { font-size: 22px; }
     </style>
 </head>
 <body>
@@ -176,7 +169,7 @@
         <div class="certificate-container">
             <div class="header-content">
                 <div class="logo-container">
-                    <img class="nfo-logo" alt="NFO Logo" loading="lazy" src="{{logoImage}}"/>
+                    <img class="nfo-logo" alt="NFO Logo" src="{{logoImage}}"/>
                 </div>
                 <div style="color: #B18C2C;">
                     <div class="certificate-title">
@@ -184,7 +177,7 @@
                     </div>
                     <div class="certificate-content">
                         <b style="line-height: 25px; margin-top: 20px; color: #34454E;">This certificate is awarded to</b>
-                        <h1 class="student-name">{{coordinator}}</h1>
+                        <h1 class="student-name {{getNameSizeClass coordinator}}">{{coordinator}}</h1>
                         <i class="school-info">
                             Coordinating teacher of {{school}}
                         </i>
@@ -194,24 +187,38 @@
 
                         <div class="exam-date">
                             in recognition of the hard work, dedication <br> and academic initiative displayed in promoting financial<br>literacy among students for the <br>
-                           <div style="color: #34454ECC;"> National Finance Olympiad 2024 - 25 </div>
+                           <div style="color: #000000;"> National Finance Olympiad 2025 - 26 </div>
                         </div>
                     </div>
                 </div>
             </div>
             <div class="signatures-container">
-                <div class="signature-block left">
+                <div class="signature-block">
                     <img class="signature-image cashfree" alt="CashFree Signature" src="{{cashfreeSignature}}"/>
                     <div>
                         <div class="signature-name">Reeju Datta</div>
                         <div class="signature-title">Co-founder, Cashfree</div>
                     </div>
                 </div>
-                <div class="signature-block right">
+                <div class="signature-block">
+                    <img class="signature-image sankarshan" alt="Sankarshan Basu Signature" src="{{sankarshanBasuSignature}}"/>
+                    <div>
+                        <div class="signature-name">Sankarshan Basu</div>
+                        <div class="signature-title">Professor, IIM Bangalore</div>
+                    </div>
+                </div>
+                <div class="signature-block">
                     <img class="signature-image streak" alt="Streak Signature" src="{{streakSignature}}"/>
                     <div>
                         <div class="signature-name">Shiv Bidani</div>
-                        <div class="signature-title">Co-founder, Streak</div>
+                        <div class="signature-title">Co-founder, NFO</div>
+                    </div>
+                </div>
+                <div class="signature-block">
+                    <img class="signature-image mitul" alt="Mitul Mehta Signature" src="{{mitulMehtaSignature}}"/>
+                    <div>
+                        <div class="signature-name">Mitul Mehta</div>
+                        <div class="signature-title">Co-founder, NFO</div>
                     </div>
                 </div>
             </div>

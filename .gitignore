@@ -2,3 +2,4 @@ node_modules
 temp_pdfs/
 temp_pdfs/*
 *.pdf.tmp
+secrets/
